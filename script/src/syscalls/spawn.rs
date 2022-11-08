@@ -1,0 +1,241 @@
+use crate::cost_model::{instruction_cycles, transferred_byte_cycles};
+use crate::syscalls::utils::load_c_string;
+use crate::syscalls::{
+    GetMemoryLimit, SetContent, Source, SourceEntry, INDEX_OUT_OF_BOUND, SLICE_OUT_OF_BOUND, SPAWN,
+    SPAWN_EXCEEDED_MAX_CONTENT_LENGTH, SPAWN_EXCEEDED_MAX_PEAK_MEMORY, SPAWN_MAX_CONTENT_LENGTH,
+    SPAWN_MAX_MEMORY, SPAWN_MAX_PEAK_MEMORY, SPAWN_WRONG_MEMORY_LIMIT, WRONG_FORMAT,
+};
+use crate::types::Machine;
+use crate::verify::TransactionScriptsVerifier;
+use crate::{ScriptGroup, ScriptVersion};
+use ckb_traits::{CellDataProvider, HeaderProvider};
+use ckb_types::core::cell::CellMeta;
+use ckb_vm::{
+    registers::{A0, A1, A2, A3, A4, A5, A7, SP},
+    DefaultMachineBuilder, Error as VMError, Memory, Register, SupportMachine, Syscalls,
+};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+pub struct Spawn<'a, DL> {
+    data_loader: &'a DL,
+    outputs: &'a [CellMeta],
+    resolved_inputs: &'a [CellMeta],
+    resolved_cell_deps: &'a [CellMeta],
+    group_inputs: &'a [usize],
+    group_outputs: &'a [usize],
+    script_version: ScriptVersion,
+    script_group: &'a ScriptGroup,
+    verifier: &'a TransactionScriptsVerifier<'a, DL>,
+    peak_memory: u64,
+}
+
+impl<'a, DL: CellDataProvider + 'a> Spawn<'a, DL> {
+    pub fn new(
+        data_loader: &'a DL,
+        outputs: &'a [CellMeta],
+        resolved_inputs: &'a [CellMeta],
+        resolved_cell_deps: &'a [CellMeta],
+        group_inputs: &'a [usize],
+        group_outputs: &'a [usize],
+        script_version: ScriptVersion,
+        script_group: &'a ScriptGroup,
+        verifier: &'a TransactionScriptsVerifier<'a, DL>,
+        peak_memory: u64,
+    ) -> Self {
+        Self {
+            data_loader,
+            outputs,
+            resolved_inputs,
+            resolved_cell_deps,
+            group_inputs,
+            group_outputs,
+            script_version,
+            script_group,
+            verifier,
+            peak_memory,
+        }
+    }
+
+    fn fetch_cell(&self, source: Source, index: usize) -> Result<&'a CellMeta, u8> {
+        let cell_opt = match source {
+            Source::Transaction(SourceEntry::Input) => self.resolved_inputs.get(index),
+            Source::Transaction(SourceEntry::Output) => self.outputs.get(index),
+            Source::Transaction(SourceEntry::CellDep) => self.resolved_cell_deps.get(index),
+            Source::Group(SourceEntry::Input) => self
+                .group_inputs
+                .get(index)
+                .and_then(|actual_index| self.resolved_inputs.get(*actual_index)),
+            Source::Group(SourceEntry::Output) => self
+                .group_outputs
+                .get(index)
+                .and_then(|actual_index| self.outputs.get(*actual_index)),
+            Source::Transaction(SourceEntry::HeaderDep)
+            | Source::Group(SourceEntry::CellDep)
+            | Source::Group(SourceEntry::HeaderDep) => {
+                return Err(INDEX_OUT_OF_BOUND);
+            }
+        };
+
+        cell_opt.ok_or(INDEX_OUT_OF_BOUND)
+    }
+}
+
+impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Mac>
+    for Spawn<'a, DL>
+{
+    fn initialize(&mut self, _machine: &mut Mac) -> Result<(), VMError> {
+        Ok(())
+    }
+
+    fn ecall(&mut self, machine: &mut Mac) -> Result<bool, VMError> {
+        if machine.registers()[A7].to_u64() != SPAWN {
+            return Ok(false);
+        }
+        // There are 4 parameters on the stack.
+        let sp = machine.registers()[SP].clone();
+        let sp_2nd = sp.overflowing_add(&Mac::REG::from_u8(8));
+        let sp_3rd = sp.overflowing_add(&Mac::REG::from_u8(16));
+        machine.set_register(SP, sp.overflowing_add(&Mac::REG::from_u8(24)));
+        // Arguments for limiting.
+        let memory_limit = machine.registers()[A0].to_u64();
+        let cycles_limit = machine.max_cycles() - machine.cycles();
+        // Arguments for position child programs.
+        let index = machine.registers()[A1].to_u64();
+        let source = Source::parse_from_u64(machine.registers()[A2].to_u64())?;
+        let bounds = machine.registers()[A3].to_u64();
+        let offset = (bounds >> 32) as usize;
+        let length = bounds as u32 as usize;
+        // Inputs for child programs.
+        let argc = machine.registers()[A4].to_u64();
+        let argv = machine.registers()[A5].to_u64();
+        // Outputs for child programs.
+        let exit_code = machine.memory_mut().load64(&sp)?;
+        let content = machine.memory_mut().load64(&sp_2nd)?;
+        let content_length_addr = machine.memory_mut().load64(&sp_3rd)?;
+        let content_length = machine.memory_mut().load64(&content_length_addr)?.to_u64();
+        if content_length > SPAWN_MAX_CONTENT_LENGTH {
+            machine.set_register(A0, Mac::REG::from_u8(SPAWN_EXCEEDED_MAX_CONTENT_LENGTH));
+            return Ok(true);
+        }
+        if memory_limit > SPAWN_MAX_MEMORY || memory_limit == 0 {
+            machine.set_register(A0, Mac::REG::from_u8(SPAWN_WRONG_MEMORY_LIMIT));
+            return Ok(true);
+        }
+        if self.peak_memory + memory_limit > SPAWN_MAX_PEAK_MEMORY {
+            machine.set_register(A0, Mac::REG::from_u8(SPAWN_EXCEEDED_MAX_PEAK_MEMORY));
+            return Ok(true);
+        }
+        // Build child machine.
+        let machine_content = Rc::new(RefCell::new(vec![]));
+        let mut machine_child = {
+            let machine_core = self.script_version.init_core_machine(cycles_limit);
+            let machine_builder = DefaultMachineBuilder::new(machine_core)
+                .instruction_cycle_func(&instruction_cycles);
+            let machine_syscalls =
+                self.verifier
+                    .generate_syscalls(self.script_version, self.script_group, false);
+            let machine_builder = machine_syscalls
+                .into_iter()
+                .fold(machine_builder, |builder, syscall| builder.syscall(syscall));
+            let machine_builder =
+                machine_builder.syscall(Box::new(GetMemoryLimit::new(memory_limit)));
+            let machine_builder = machine_builder.syscall(Box::new(SetContent::new(
+                machine_content.clone(),
+                content_length.to_u64(),
+            )));
+            let machine_builder = machine_builder.syscall(Box::new(Spawn::new(
+                self.data_loader,
+                self.outputs,
+                self.resolved_inputs,
+                self.resolved_cell_deps,
+                self.group_inputs,
+                self.group_outputs,
+                self.script_version,
+                self.script_group,
+                self.verifier,
+                self.peak_memory + memory_limit,
+            )));
+            let mut machine_child = Machine::new(machine_builder.build());
+            machine_child.set_max_cycles(cycles_limit);
+            machine_child
+        };
+
+        // Get binary
+        let program = {
+            let cell = self.fetch_cell(source, index as usize);
+            if let Err(err) = cell {
+                machine.set_register(A0, Mac::REG::from_u8(err));
+                return Ok(true);
+            }
+            let cell = cell.unwrap();
+            let data = self.data_loader.load_cell_data(cell).ok_or_else(|| {
+                VMError::Unexpected(format!(
+                    "Unexpected load_cell_data failed {}",
+                    cell.out_point,
+                ))
+            })?;
+            let size = data.len();
+            if offset >= size {
+                machine.set_register(A0, Mac::REG::from_u8(SLICE_OUT_OF_BOUND));
+                return Ok(true);
+            };
+            if length == 0 {
+                data.slice(offset..size)
+            } else {
+                let end = offset.checked_add(length).ok_or(VMError::MemOutOfBound)?;
+                if end > size {
+                    machine.set_register(A0, Mac::REG::from_u8(SLICE_OUT_OF_BOUND));
+                    return Ok(true);
+                }
+                data.slice(offset..end)
+            }
+        };
+
+        let mut addr = argv.to_u64();
+        let mut argv_vec = Vec::new();
+        for _ in 0..argc {
+            let target_addr = machine
+                .memory_mut()
+                .load64(&Mac::REG::from_u64(addr))?
+                .to_u64();
+            let cstr = load_c_string(machine, target_addr)?;
+            argv_vec.push(cstr);
+            addr += 8;
+        }
+
+        match machine_child.load_program(&program, &argv_vec) {
+            Ok(size) => {
+                machine_child
+                    .machine
+                    .add_cycles_no_checking(transferred_byte_cycles(size))?;
+            }
+            Err(_) => {
+                machine.set_register(A0, Mac::REG::from_u8(WRONG_FORMAT));
+                return Ok(true);
+            }
+        }
+        match machine_child.run() {
+            Ok(data) => {
+                machine.set_register(A0, Mac::REG::from_u32(0));
+                machine
+                    .memory_mut()
+                    .store8(&exit_code, &Mac::REG::from_i8(data))?;
+                machine
+                    .memory_mut()
+                    .store_bytes(content.to_u64(), &machine_content.borrow())?;
+                machine.memory_mut().store64(
+                    &content_length_addr,
+                    &Mac::REG::from_u64(machine_content.borrow().len() as u64),
+                )?;
+                machine.add_cycles_no_checking(machine_child.machine.cycles())?;
+                return Ok(true);
+            }
+            Err(err) => {
+                // keep atomic.
+                machine.set_register(SP, sp.overflowing_sub(&Mac::REG::from_u8(24)));
+                return Err(err);
+            }
+        }
+    }
+}

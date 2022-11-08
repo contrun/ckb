@@ -4,8 +4,8 @@ use crate::{
     cost_model::{instruction_cycles, transferred_byte_cycles},
     error::{ScriptError, TransactionScriptError},
     syscalls::{
-        CurrentCycles, Debugger, Exec, LoadCell, LoadCellData, LoadHeader, LoadInput, LoadScript,
-        LoadScriptHash, LoadTx, LoadWitness, VMVersion,
+        CurrentCycles, Debugger, Exec, GetMemoryLimit, LoadCell, LoadCellData, LoadHeader,
+        LoadInput, LoadScript, LoadScriptHash, LoadTx, LoadWitness, SetContent, Spawn, VMVersion,
     },
     type_id::TypeIdSystemScript,
     types::{
@@ -35,6 +35,7 @@ use ckb_vm::{
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 #[cfg(test)]
 mod tests;
@@ -845,6 +846,7 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
         &'a self,
         script_version: ScriptVersion,
         script_group: &'a ScriptGroup,
+        is_root: bool,
     ) -> Vec<Box<(dyn Syscalls<CoreMachine> + 'a)>> {
         let current_script_hash = script_group.script.calc_script_hash();
         let mut syscalls: Vec<Box<(dyn Syscalls<CoreMachine> + 'a)>> = vec![
@@ -876,7 +878,25 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
                 Box::new(
                     self.build_exec(&script_group.input_indices, &script_group.output_indices),
                 ),
-            ])
+            ]);
+            if is_root {
+                syscalls.append(&mut vec![
+                    Box::new(GetMemoryLimit::new(8)),
+                    Box::new(SetContent::new(Rc::new(RefCell::new(vec![])), 0)),
+                    Box::new(Spawn::new(
+                        self.data_loader,
+                        &self.outputs,
+                        self.resolved_inputs(),
+                        self.resolved_cell_deps(),
+                        &script_group.input_indices,
+                        &script_group.output_indices,
+                        script_version,
+                        script_group,
+                        self,
+                        8,
+                    )),
+                ])
+            }
         }
         syscalls
     }
@@ -891,7 +911,7 @@ impl<'a, DL: CellDataProvider + HeaderProvider> TransactionScriptsVerifier<'a, D
         let machine_builder = DefaultMachineBuilder::<CoreMachine>::new(core_machine)
             .instruction_cycle_func(&instruction_cycles);
         let machine_builder = self
-            .generate_syscalls(script_version, script_group)
+            .generate_syscalls(script_version, script_group, true)
             .into_iter()
             .fold(machine_builder, |builder, syscall| builder.syscall(syscall));
         let default_machine = machine_builder.build();

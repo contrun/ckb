@@ -48,7 +48,26 @@ ALL_BINS := jalr_zero \
             load_is_even_into_global \
             load_is_even_with_snapshot \
             load_arithmetic \
-            debugger
+            debugger \
+            get_memory_limit \
+            set_content \
+            spawn_big_content_length \
+            spawn_big_memory_size \
+            spawn_callee_exec_callee \
+            spawn_callee_exec_caller \
+            spawn_callee_get_memory_limit \
+            spawn_callee_out_of_cycles \
+            spawn_callee_set_content \
+            spawn_callee_strcat \
+            spawn_caller_exec \
+            spawn_caller_get_memory_limit \
+            spawn_caller_out_of_cycles \
+            spawn_caller_out_of_cycles_wrap \
+            spawn_caller_set_content \
+            spawn_caller_strcat_wrap \
+            spawn_caller_strcat \
+            spawn_caller_strcat_data_hash \
+            spawn_recursive
 ALL_LIBS := is_even.lib \
             add1.lib sub1.lib mul2.lib div2.lib
 
@@ -111,3 +130,23 @@ sub1.lib: sub1.c
 mul2.lib: mul2.c
 div2.lib: div2.c
 load_arithmetic: load_arithmetic.c
+
+get_memory_limit: get_memory_limit.c
+set_content: set_content.c
+spawn_big_content_length: spawn_big_content_length.c
+spawn_big_memory_size: spawn_big_memory_size.c
+spawn_callee_exec_callee: spawn_callee_exec_callee.c
+spawn_callee_exec_caller: spawn_callee_exec_caller.c
+spawn_callee_get_memory_limit: spawn_callee_get_memory_limit.c
+spawn_callee_out_of_cycles: spawn_callee_out_of_cycles.c
+spawn_callee_set_content: spawn_callee_out_of_cycles.c
+spawn_callee_strcat: spawn_callee_strcat.c
+spawn_caller_exec: spawn_caller_exec.c
+spawn_caller_get_memory_limit: spawn_caller_get_memory_limit.c
+spawn_caller_out_of_cycles: spawn_caller_out_of_cycles.c
+spawn_caller_out_of_cycles_wrap: spawn_caller_out_of_cycles_wrap.c
+spawn_caller_set_content: spawn_caller_set_content.c
+spawn_caller_strcat_wrap: spawn_caller_strcat_wrap.c
+spawn_caller_strcat: spawn_caller_strcat.c
+spawn_caller_strcat_data_hash: spawn_caller_strcat_data_hash.c
+spawn_recursive: spawn_recursive.c

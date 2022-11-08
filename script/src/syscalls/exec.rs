@@ -1,4 +1,5 @@
 use crate::cost_model::transferred_byte_cycles;
+use crate::syscalls::utils::load_c_string;
 use crate::syscalls::{
     Place, Source, SourceEntry, EXEC, INDEX_OUT_OF_BOUND, SLICE_OUT_OF_BOUND, WRONG_FORMAT,
 };
@@ -8,7 +9,7 @@ use ckb_types::packed::{Bytes as PackedBytes, BytesVec};
 use ckb_vm::Memory;
 use ckb_vm::{
     registers::{A0, A1, A2, A3, A4, A5, A7},
-    Bytes, Error as VMError, Register, SupportMachine, Syscalls,
+    Error as VMError, Register, SupportMachine, Syscalls,
 };
 use ckb_vm::{DEFAULT_STACK_SIZE, RISCV_MAX_MEMORY};
 
@@ -86,25 +87,6 @@ impl<'a, DL: CellDataProvider + 'a> Exec<'a, DL> {
 
         witness_opt.ok_or(INDEX_OUT_OF_BOUND)
     }
-}
-
-fn load_c_string<Mac: SupportMachine>(machine: &mut Mac, addr: u64) -> Result<Bytes, VMError> {
-    let mut buffer = Vec::new();
-    let mut addr = addr;
-
-    loop {
-        let byte = machine
-            .memory_mut()
-            .load8(&Mac::REG::from_u64(addr))?
-            .to_u8();
-        if byte == 0 {
-            break;
-        }
-        buffer.push(byte);
-        addr += 1;
-    }
-
-    Ok(Bytes::from(buffer))
 }
 
 impl<'a, Mac: SupportMachine, DL: CellDataProvider> Syscalls<Mac> for Exec<'a, DL> {
