@@ -11,7 +11,7 @@ use crate::{ScriptGroup, ScriptVersion};
 use ckb_traits::{CellDataProvider, HeaderProvider};
 use ckb_types::core::cell::CellMeta;
 use ckb_vm::{
-    registers::{A0, A1, A2, A3, A4, A5, A7, SP},
+    registers::{A0, A1, A2, A3, A4, A5, A7},
     DefaultMachineBuilder, Error as VMError, Memory, Register, SupportMachine, Syscalls,
 };
 use std::cell::RefCell;
@@ -92,28 +92,38 @@ impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Ma
         if machine.registers()[A7].to_u64() != SPAWN {
             return Ok(false);
         }
-        // There are 4 parameters on the stack.
-        let sp = machine.registers()[SP].clone();
-        let sp_2nd = sp.overflowing_add(&Mac::REG::from_u8(8));
-        let sp_3rd = sp.overflowing_add(&Mac::REG::from_u8(16));
-        machine.set_register(SP, sp.overflowing_add(&Mac::REG::from_u8(24)));
-        // Arguments for limiting.
-        let memory_limit = machine.registers()[A0].to_u64();
-        let cycles_limit = machine.max_cycles() - machine.cycles();
         // Arguments for position child programs.
-        let index = machine.registers()[A1].to_u64();
-        let source = Source::parse_from_u64(machine.registers()[A2].to_u64())?;
-        let bounds = machine.registers()[A3].to_u64();
+        let index = machine.registers()[A0].to_u64();
+        let source = Source::parse_from_u64(machine.registers()[A1].to_u64())?;
+        let bounds = machine.registers()[A2].to_u64();
         let offset = (bounds >> 32) as usize;
         let length = bounds as u32 as usize;
         // Inputs for child programs.
-        let argc = machine.registers()[A4].to_u64();
-        let argv = machine.registers()[A5].to_u64();
+        let argc = machine.registers()[A3].to_u64();
+        let argv_addr = machine.registers()[A4].to_u64();
+        let spgs_addr = machine.registers()[A5].to_u64();
+        let memory_limit_addr = spgs_addr;
+        let exit_code_addr_addr = spgs_addr.wrapping_add(8);
+        let content_addr_addr = spgs_addr.wrapping_add(16);
+        let content_length_addr_addr = spgs_addr.wrapping_add(24);
+        // Arguments for limiting.
+        let memory_limit = machine
+            .memory_mut()
+            .load64(&Mac::REG::from_u64(memory_limit_addr))?
+            .to_u64();
+        let cycles_limit = machine.max_cycles() - machine.cycles();
         // Outputs for child programs.
-        let exit_code = machine.memory_mut().load64(&sp)?;
-        let content = machine.memory_mut().load64(&sp_2nd)?;
-        let content_length_addr = machine.memory_mut().load64(&sp_3rd)?;
+        let exit_code_addr = machine
+            .memory_mut()
+            .load64(&Mac::REG::from_u64(exit_code_addr_addr))?;
+        let content_addr = machine
+            .memory_mut()
+            .load64(&Mac::REG::from_u64(content_addr_addr))?;
+        let content_length_addr = machine
+            .memory_mut()
+            .load64(&Mac::REG::from_u64(content_length_addr_addr))?;
         let content_length = machine.memory_mut().load64(&content_length_addr)?.to_u64();
+        // Arguments check.
         if content_length > SPAWN_MAX_CONTENT_LENGTH {
             machine.set_register(A0, Mac::REG::from_u8(SPAWN_EXCEEDED_MAX_CONTENT_LENGTH));
             return Ok(true);
@@ -191,8 +201,8 @@ impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Ma
                 data.slice(offset..end)
             }
         };
-
-        let mut addr = argv.to_u64();
+        // Build arguments.
+        let mut addr = argv_addr.to_u64();
         let mut argv_vec = Vec::new();
         for _ in 0..argc {
             let target_addr = machine
@@ -203,7 +213,7 @@ impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Ma
             argv_vec.push(cstr);
             addr += 8;
         }
-
+        // Run child machine.
         match machine_child.load_program(&program, &argv_vec) {
             Ok(size) => {
                 machine_child
@@ -215,15 +225,16 @@ impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Ma
                 return Ok(true);
             }
         }
+        // Check result.
         match machine_child.run() {
             Ok(data) => {
                 machine.set_register(A0, Mac::REG::from_u32(0));
                 machine
                     .memory_mut()
-                    .store8(&exit_code, &Mac::REG::from_i8(data))?;
+                    .store8(&exit_code_addr, &Mac::REG::from_i8(data))?;
                 machine
                     .memory_mut()
-                    .store_bytes(content.to_u64(), &machine_content.borrow())?;
+                    .store_bytes(content_addr.to_u64(), &machine_content.borrow())?;
                 machine.memory_mut().store64(
                     &content_length_addr,
                     &Mac::REG::from_u64(machine_content.borrow().len() as u64),
@@ -232,8 +243,6 @@ impl<'a, Mac: SupportMachine, DL: CellDataProvider + HeaderProvider> Syscalls<Ma
                 return Ok(true);
             }
             Err(err) => {
-                // keep atomic.
-                machine.set_register(SP, sp.overflowing_sub(&Mac::REG::from_u8(24)));
                 return Err(err);
             }
         }

@@ -1687,7 +1687,10 @@ fn check_spawn_strcat_data_hash() {
         load_cell_from_path("testdata/spawn_caller_strcat_data_hash");
     let (spawn_callee_cell, _spawn_callee_data_hash) =
         load_cell_from_path("testdata/spawn_callee_strcat");
-    println!("check_spawn_strcat_data_hash callee_hash={:?}", _spawn_callee_data_hash);
+    println!(
+        "check_spawn_strcat_data_hash callee_hash={:?}",
+        _spawn_callee_data_hash
+    );
 
     let spawn_caller_script = Script::new_builder()
         .hash_type(script_version.data_hash_type().into())
