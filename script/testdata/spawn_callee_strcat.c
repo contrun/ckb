@@ -9,7 +9,7 @@ int main(int argc, char *argv[]) {
     strcat(content, argv[i]);
   }
   uint64_t content_size = (uint64_t)strlen(content);
-  ckb_set_content(&content[0], &content_size);
+  ckb_set_content((uint8_t *)&content[0], &content_size);
   if (content_size != (uint64_t)strlen(content)) {
     return 1;
   }
