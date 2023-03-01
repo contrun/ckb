@@ -1647,6 +1647,41 @@ fn check_set_content() {
 }
 
 #[test]
+fn check_spawn_lua_strcat() {
+    let script_version = SCRIPT_VERSION;
+
+    let (spawn_caller_cell, spawn_caller_data_hash) =
+        load_cell_from_path("testdata/spawn_caller_lua_strcat");
+    // This is the lua-loader binary built from
+    // https://github.com/contrun/ckb-lua/tree/dc80cd5bc52381b0e16b7ae5f5aa4163a52d1555
+    let (spawn_callee_cell, _spawn_callee_data_hash) =
+        load_cell_from_path("testdata/spawn_callee_lua_strcat");
+
+    let spawn_caller_script = Script::new_builder()
+        .hash_type(script_version.data_hash_type().into())
+        .code_hash(spawn_caller_data_hash)
+        .build();
+    let output = CellOutputBuilder::default()
+        .capacity(capacity_bytes!(100).pack())
+        .lock(spawn_caller_script)
+        .build();
+    let input = CellInput::new(OutPoint::null(), 0);
+
+    let transaction = TransactionBuilder::default().input(input).build();
+    let dummy_cell = create_dummy_cell(output);
+
+    let rtx = ResolvedTransaction {
+        transaction,
+        resolved_cell_deps: vec![spawn_caller_cell, spawn_callee_cell],
+        resolved_inputs: vec![dummy_cell],
+        resolved_dep_groups: vec![],
+    };
+    let verifier = TransactionScriptsVerifierWithEnv::new();
+    let result = verifier.verify_without_limit(script_version, &rtx);
+    assert_eq!(result.is_ok(), script_version >= ScriptVersion::V1);
+}
+
+#[test]
 fn check_spawn_strcat() {
     let script_version = SCRIPT_VERSION;
 

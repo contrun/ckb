@@ -66,6 +66,7 @@ ALL_BINS := jalr_zero \
             spawn_caller_set_content \
             spawn_caller_strcat_wrap \
             spawn_caller_strcat \
+            spawn_caller_lua_strcat \
             spawn_caller_strcat_data_hash \
             spawn_recursive
 ALL_LIBS := is_even.lib \
@@ -148,5 +149,6 @@ spawn_caller_out_of_cycles_wrap: spawn_caller_out_of_cycles_wrap.c
 spawn_caller_set_content: spawn_caller_set_content.c
 spawn_caller_strcat_wrap: spawn_caller_strcat_wrap.c
 spawn_caller_strcat: spawn_caller_strcat.c
+spawn_caller_lua_strcat: spawn_caller_lua_strcat.c
 spawn_caller_strcat_data_hash: spawn_caller_strcat_data_hash.c
 spawn_recursive: spawn_recursive.c
