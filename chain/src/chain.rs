@@ -463,12 +463,14 @@ impl ChainService {
         if new_best_block {
             let tip_header = block.header();
             info!(
-                "block: {}, hash: {:#x}, epoch: {:#}, total_diff: {:#x}, txs: {}",
+                "block: {}, hash: {:#x}, epoch: {:#}, total_diff: {:#x}, uncles: {}, txs: {}, proposals {}",
                 tip_header.number(),
                 tip_header.hash(),
                 tip_header.epoch(),
                 total_difficulty,
-                block.transactions().len()
+                block.data().uncles().len(),
+                block.transactions().len(),
+                block.data().proposals().len()
             );
 
             self.update_proposal_table(&fork);

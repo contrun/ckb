@@ -6,7 +6,7 @@ mod process;
 #[cfg(test)]
 mod tests;
 
-use crate::component::entry::TxEntry;
+use crate::component::{entry::TxEntry, proposed};
 use crate::error::BlockAssemblerError;
 pub use candidate_uncles::CandidateUncles;
 use ckb_app_config::BlockAssemblerConfig;
@@ -551,12 +551,15 @@ impl BlockAssembler {
         let empty_dao = packed::Byte32::default();
         let raw_header = packed::RawHeader::new_builder().dao(empty_dao).build();
         let header = packed::Header::new_builder().raw(raw_header).build();
+        let proposals = proposals.cloned().collect::<Vec<_>>();
+        let proposals_len = proposals.len();
+        let cellbase_size = cellbase.serialized_size_in_block();
         let block = if let Some(extension) = extension_opt {
             packed::BlockV1::new_builder()
                 .header(header)
                 .transactions(vec![cellbase].pack())
                 .uncles(uncles.iter().map(|u| u.data()).pack())
-                .proposals(proposals.cloned().collect::<Vec<_>>().pack())
+                .proposals(proposals.pack())
                 .extension(extension)
                 .build()
                 .as_v0()
@@ -565,10 +568,20 @@ impl BlockAssembler {
                 .header(header)
                 .transactions(vec![cellbase].pack())
                 .uncles(uncles.iter().map(|u| u.data()).pack())
-                .proposals(proposals.cloned().collect::<Vec<_>>().pack())
+                .proposals(proposals.pack())
                 .build()
         };
-        block.serialized_size_without_uncle_proposals()
+
+        let ret = block.serialized_size_without_uncle_proposals();
+
+        debug!(
+            "[BlockAssembler] basic_block_size proposals {}, uncles {}, cellbase: {}, {}",
+            proposals_len,
+            uncles.len(),
+            cellbase_size,
+            ret,
+        );
+        ret
     }
 
     fn calc_dao(
