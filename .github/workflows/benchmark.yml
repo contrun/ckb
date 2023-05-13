@@ -38,7 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          repository: nervosnetwork/ckb-integration-test
+          repository: gpBlockchain/ckb-integration-test
+          ref: feat/bench
       - name: Get branch name when event is pr review comments
         if: github.event_name == 'pull_request_review' && contains(github.event.review.body, '#benchmark')
         uses: xt0rted/pull-request-comment-branch@v1
