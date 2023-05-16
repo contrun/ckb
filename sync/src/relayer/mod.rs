@@ -20,7 +20,7 @@ use self::get_block_transactions_process::GetBlockTransactionsProcess;
 use self::get_transactions_process::GetTransactionsProcess;
 use self::transaction_hashes_process::TransactionHashesProcess;
 use self::transactions_process::TransactionsProcess;
-use crate::types::{ActiveChain, BlockNumberAndHash, SyncShared};
+use crate::types::{ActiveChain, SyncShared};
 use crate::utils::{metric_ckb_message_bytes, send_message_to, MetricDirection};
 use crate::{Status, StatusCode};
 use ckb_chain::chain::ChainController;
@@ -31,6 +31,7 @@ use ckb_network::{
     SupportProtocols, TargetSession,
 };
 use ckb_shared::block_status::BlockStatus;
+use ckb_shared::types::BlockNumberAndHash;
 use ckb_systemtime::unix_time_as_millis;
 use ckb_tx_pool::service::TxVerificationResult;
 use ckb_types::{
