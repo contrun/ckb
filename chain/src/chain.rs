@@ -254,7 +254,7 @@ impl ChainService {
         if let Some(name) = thread_name {
             thread_builder = thread_builder.name(name.to_string());
         }
-        let tx_control = self.shared.tx_pool_controller().clone();
+        // let tx_control = self.shared.tx_pool_controller().clone();
 
         let thread = thread_builder
             .spawn(move || loop {
@@ -264,9 +264,7 @@ impl ChainService {
                     },
                     recv(process_block_receiver) -> msg => match msg {
                         Ok(Request { responder, arguments: (block, verify) }) => {
-                            let _ = tx_control.suspend_chunk_process();
                             let _ = responder.send(self.process_block(block, verify));
-                            let _ = tx_control.continue_chunk_process();
                         },
                         _ => {
                             error!("process_block_receiver closed");
@@ -275,9 +273,7 @@ impl ChainService {
                     },
                     recv(truncate_receiver) -> msg => match msg {
                         Ok(Request { responder, arguments: target_tip_hash }) => {
-                            let _ = tx_control.suspend_chunk_process();
                             let _ = responder.send(self.truncate(&target_tip_hash));
-                            let _ = tx_control.continue_chunk_process();
                         },
                         _ => {
                             error!("truncate_receiver closed");

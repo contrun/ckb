@@ -163,10 +163,10 @@ impl TxPoolService {
         orphan.contains_key(&tx.proposal_short_id())
     }
 
-    pub(crate) async fn chunk_contains(&self, tx: &TransactionView) -> bool {
-        let chunk = self.chunk.read().await;
-        chunk.contains_key(&tx.proposal_short_id())
-    }
+    // pub(crate) async fn chunk_contains(&self, tx: &TransactionView) -> bool {
+    //     let chunk = self.chunk.read().await;
+    //     chunk.contains_key(&tx.proposal_short_id())
+    // }
 
     pub(crate) async fn with_tx_pool_read_lock<U, F: FnMut(&TxPool, Arc<Snapshot>) -> U>(
         &self,
@@ -230,37 +230,37 @@ impl TxPoolService {
         Ok(())
     }
 
-    pub(crate) async fn resumeble_process_tx(
-        &self,
-        tx: TransactionView,
-        remote: Option<(Cycle, PeerIndex)>,
-    ) -> Result<(), Reject> {
-        // non contextual verify first
-        self.non_contextual_verify(&tx, None)?;
+    // pub(crate) async fn resumeble_process_tx(
+    //     &self,
+    //     tx: TransactionView,
+    //     remote: Option<(Cycle, PeerIndex)>,
+    // ) -> Result<(), Reject> {
+    //     // non contextual verify first
+    //     self.non_contextual_verify(&tx, None)?;
 
-        if self.chunk_contains(&tx).await || self.orphan_contains(&tx).await {
-            return Err(Reject::Duplicated(tx.hash()));
-        }
+    //     if self.orphan_contains(&tx).await {
+    //         return Err(Reject::Duplicated(tx.hash()));
+    //     }
 
-        if let Some((ret, snapshot)) = self._resumeble_process_tx(tx.clone(), remote).await {
-            match ret {
-                Ok(processed) => {
-                    if let ProcessResult::Completed(completed) = processed {
-                        self.after_process(tx, remote, &snapshot, &Ok(completed))
-                            .await;
-                    }
-                    Ok(())
-                }
-                Err(e) => {
-                    self.after_process(tx, remote, &snapshot, &Err(e.clone()))
-                        .await;
-                    Err(e)
-                }
-            }
-        } else {
-            Ok(())
-        }
-    }
+    //     if let Some((ret, snapshot)) = self._resumeble_process_tx(tx.clone(), remote).await {
+    //         match ret {
+    //             Ok(processed) => {
+    //                 if let ProcessResult::Completed(completed) = processed {
+    //                     self.after_process(tx, remote, &snapshot, &Ok(completed))
+    //                         .await;
+    //                 }
+    //                 Ok(())
+    //             }
+    //             Err(e) => {
+    //                 self.after_process(tx, remote, &snapshot, &Err(e.clone()))
+    //                     .await;
+    //                 Err(e)
+    //             }
+    //         }
+    //     } else {
+    //         Ok(())
+    //     }
+    // }
 
     pub(crate) async fn process_tx(
         &self,
@@ -270,7 +270,7 @@ impl TxPoolService {
         // non contextual verify first
         self.non_contextual_verify(&tx, remote)?;
 
-        if self.chunk_contains(&tx).await || self.orphan_contains(&tx).await {
+        if self.orphan_contains(&tx).await {
             return Err(Reject::Duplicated(tx.hash()));
         }
 
@@ -298,12 +298,12 @@ impl TxPoolService {
 
     pub(crate) async fn remove_tx(&self, tx_hash: Byte32) -> bool {
         let id = ProposalShortId::from_tx_hash(&tx_hash);
-        {
-            let mut chunk = self.chunk.write().await;
-            if chunk.remove_chunk_tx(&id).is_some() {
-                return true;
-            }
-        }
+        // {
+        //     let mut chunk = self.chunk.write().await;
+        //     if chunk.remove_chunk_tx(&id).is_some() {
+        //         return true;
+        //     }
+        // }
         {
             let mut orphan = self.orphan.write().await;
             if orphan.remove_orphan_tx(&id).is_some() {
@@ -440,18 +440,19 @@ impl TxPoolService {
 
         while let Some(previous) = orphan_queue.pop_front() {
             if let Some(orphan) = self.find_orphan_by_previous(&previous).await {
-                if orphan.cycle > self.tx_pool_config.max_tx_verify_cycles {
-                    debug!(
-                        "process_orphan {} add to chunk,  find previous from {}",
-                        tx.hash(),
-                        orphan.tx.hash()
-                    );
-                    self.remove_orphan_tx(&orphan.tx.proposal_short_id()).await;
-                    self.chunk
-                        .write()
-                        .await
-                        .add_tx(orphan.tx, Some((orphan.cycle, orphan.peer)));
-                } else if let Some((ret, snapshot)) = self
+                // if orphan.cycle > self.tx_pool_config.max_tx_verify_cycles {
+                //     debug!(
+                //         "process_orphan {} add to chunk,  find previous from {}",
+                //         tx.hash(),
+                //         orphan.tx.hash()
+                //     );
+                //     self.remove_orphan_tx(&orphan.tx.proposal_short_id()).await;
+                //     self.chunk
+                //         .write()
+                //         .await
+                //         .add_tx(orphan.tx, Some((orphan.cycle, orphan.peer)));
+                // } else
+                if let Some((ret, snapshot)) = self
                     ._process_tx(orphan.tx.clone(), Some(orphan.cycle))
                     .await
                 {
@@ -542,136 +543,132 @@ impl TxPoolService {
         self.network.ban_peer(peer, DEFAULT_BAN_TIME, reason);
     }
 
-    async fn _resumeble_process_tx(
-        &self,
-        tx: TransactionView,
-        remote: Option<(Cycle, PeerIndex)>,
-    ) -> Option<(Result<ProcessResult, Reject>, Arc<Snapshot>)> {
-        let limit_cycles = self.tx_pool_config.max_tx_verify_cycles;
-        let tx_hash = tx.hash();
+    // async fn _resumeble_process_tx(
+    //     &self,
+    //     tx: TransactionView,
+    //     remote: Option<(Cycle, PeerIndex)>,
+    // ) -> Option<(Result<ProcessResult, Reject>, Arc<Snapshot>)> {
+    //     let limit_cycles = self.tx_pool_config.max_tx_verify_cycles;
+    //     let tx_hash = tx.hash();
 
-        let (ret, snapshot) = self.pre_check(&tx).await;
+    //     let (ret, snapshot) = self.pre_check(&tx).await;
 
-        let (tip_hash, rtx, status, fee, tx_size) = try_or_return_with_snapshot!(ret, snapshot);
+    //     let (tip_hash, rtx, status, fee, tx_size) = try_or_return_with_snapshot!(ret, snapshot);
 
-        if self.is_in_delay_window(&snapshot) {
-            let mut delay = self.delay.write().await;
-            if delay.len() < DELAY_LIMIT {
-                delay.insert(tx.proposal_short_id(), tx);
-            }
-            return None;
-        }
+    //     if self.is_in_delay_window(&snapshot) {
+    //         let mut delay = self.delay.write().await;
+    //         if delay.len() < DELAY_LIMIT {
+    //             delay.insert(tx.proposal_short_id(), tx);
+    //         }
+    //         return None;
+    //     }
 
-        let cached = self.fetch_tx_verify_cache(&tx_hash).await;
-        let tip_header = snapshot.tip_header();
-        let tx_env = Arc::new(status.with_env(tip_header));
+    //     let cached = self.fetch_tx_verify_cache(&tx_hash).await;
+    //     let tip_header = snapshot.tip_header();
+    //     let tx_env = Arc::new(status.with_env(tip_header));
 
-        let data_loader = snapshot.as_data_loader();
+    //     let data_loader = snapshot.as_data_loader();
 
-        let completed = if let Some(ref entry) = cached {
-            match entry {
-                CacheEntry::Completed(completed) => {
-                    let ret = TimeRelativeTransactionVerifier::new(
-                        Arc::clone(&rtx),
-                        Arc::clone(&self.consensus),
-                        data_loader,
-                        tx_env,
-                    )
-                    .verify()
-                    .map_err(Reject::Verification);
-                    try_or_return_with_snapshot!(ret, snapshot);
-                    *completed
-                }
-                CacheEntry::Suspended(_) => {
-                    return Some((Ok(ProcessResult::Suspended), snapshot));
-                }
-            }
-        } else {
-            let is_chunk_full = self.is_chunk_full().await;
+    //     let completed = if let Some(ref entry) = cached {
+    //         match entry {
+    //             CacheEntry::Completed(completed) => {
+    //                 let ret = TimeRelativeTransactionVerifier::new(
+    //                     Arc::clone(&rtx),
+    //                     Arc::clone(&self.consensus),
+    //                     data_loader,
+    //                     tx_env,
+    //                 )
+    //                 .verify()
+    //                 .map_err(Reject::Verification);
+    //                 try_or_return_with_snapshot!(ret, snapshot);
+    //                 *completed
+    //             }
+    //             CacheEntry::Suspended(_) => {
+    //                 return Some((Ok(ProcessResult::Suspended), snapshot));
+    //             }
+    //         }
+    //     } else {
+    //         // let is_chunk_full = self.is_chunk_full().await;
 
-            let ret = block_in_place(|| {
-                let verifier = ContextualTransactionVerifier::new(
-                    Arc::clone(&rtx),
-                    Arc::clone(&self.consensus),
-                    data_loader,
-                    tx_env,
-                );
+    //         let ret = block_in_place(|| {
+    //             let verifier = ContextualTransactionVerifier::new(
+    //                 Arc::clone(&rtx),
+    //                 Arc::clone(&self.consensus),
+    //                 data_loader,
+    //                 tx_env,
+    //             );
 
-                let (ret, fee) = verifier
-                    .resumable_verify(limit_cycles)
-                    .map_err(Reject::Verification)?;
+    //             let (ret, fee) = verifier
+    //                 .resumable_verify(limit_cycles)
+    //                 .map_err(Reject::Verification)?;
 
-                match ret {
-                    ScriptVerifyResult::Completed(cycles) => {
-                        if let Some((declared, _)) = remote {
-                            if declared != cycles {
-                                return Err(Reject::DeclaredWrongCycles(declared, cycles));
-                            }
-                        }
-                        Ok(CacheEntry::completed(cycles, fee))
-                    }
-                    ScriptVerifyResult::Suspended(state) => {
-                        if is_chunk_full {
-                            Err(Reject::Full("chunk".to_owned()))
-                        } else {
-                            let snap = Arc::new(state.try_into().map_err(Reject::Verification)?);
-                            Ok(CacheEntry::suspended(snap, fee))
-                        }
-                    }
-                }
-            });
+    //             match ret {
+    //                 ScriptVerifyResult::Completed(cycles) => {
+    //                     if let Some((declared, _)) = remote {
+    //                         if declared != cycles {
+    //                             return Err(Reject::DeclaredWrongCycles(declared, cycles));
+    //                         }
+    //                     }
+    //                     Ok(CacheEntry::completed(cycles, fee))
+    //                 }
+    //                 ScriptVerifyResult::Suspended(state) => {
+    //                     let snap = Arc::new(state.try_into().map_err(Reject::Verification)?);
+    //                     Ok(CacheEntry::suspended(snap, fee))
+    //                 }
+    //             }
+    //         });
 
-            let entry = try_or_return_with_snapshot!(ret, snapshot);
-            match entry {
-                cached @ CacheEntry::Suspended(_) => {
-                    let ret = self
-                        .enqueue_suspended_tx(rtx.transaction.clone(), cached, remote)
-                        .await;
-                    try_or_return_with_snapshot!(ret, snapshot);
-                    return Some((Ok(ProcessResult::Suspended), snapshot));
-                }
-                CacheEntry::Completed(completed) => completed,
-            }
-        };
+    //         let entry = try_or_return_with_snapshot!(ret, snapshot);
+    //         match entry {
+    //             cached @ CacheEntry::Suspended(_) => {
+    //                 let ret = self
+    //                     .enqueue_suspended_tx(rtx.transaction.clone(), cached, remote)
+    //                     .await;
+    //                 try_or_return_with_snapshot!(ret, snapshot);
+    //                 return Some((Ok(ProcessResult::Suspended), snapshot));
+    //             }
+    //             CacheEntry::Completed(completed) => completed,
+    //         }
+    //     };
 
-        let entry = TxEntry::new(rtx, completed.cycles, fee, tx_size);
+    //     let entry = TxEntry::new(rtx, completed.cycles, fee, tx_size);
 
-        let (ret, submit_snapshot) = self.submit_entry(tip_hash, entry, status).await;
-        try_or_return_with_snapshot!(ret, submit_snapshot);
+    //     let (ret, submit_snapshot) = self.submit_entry(tip_hash, entry, status).await;
+    //     try_or_return_with_snapshot!(ret, submit_snapshot);
 
-        self.notify_block_assembler(status).await;
+    //     self.notify_block_assembler(status).await;
 
-        if cached.is_none() {
-            // update cache
-            let txs_verify_cache = Arc::clone(&self.txs_verify_cache);
-            tokio::spawn(async move {
-                let mut guard = txs_verify_cache.write().await;
-                guard.put(tx_hash, CacheEntry::Completed(completed));
-            });
-        }
+    //     if cached.is_none() {
+    //         // update cache
+    //         let txs_verify_cache = Arc::clone(&self.txs_verify_cache);
+    //         tokio::spawn(async move {
+    //             let mut guard = txs_verify_cache.write().await;
+    //             guard.put(tx_hash, CacheEntry::Completed(completed));
+    //         });
+    //     }
 
-        Some((Ok(ProcessResult::Completed(completed)), submit_snapshot))
-    }
+    //     Some((Ok(ProcessResult::Completed(completed)), submit_snapshot))
+    // }
 
-    pub(crate) async fn is_chunk_full(&self) -> bool {
-        self.chunk.read().await.is_full()
-    }
+    // pub(crate) async fn is_chunk_full(&self) -> bool {
+    //     self.chunk.read().await.is_full()
+    // }
 
-    pub(crate) async fn enqueue_suspended_tx(
-        &self,
-        tx: TransactionView,
-        cached: CacheEntry,
-        remote: Option<(Cycle, PeerIndex)>,
-    ) -> Result<(), Reject> {
-        let tx_hash = tx.hash();
-        let mut chunk = self.chunk.write().await;
-        if chunk.add_tx(tx, remote) {
-            let mut guard = self.txs_verify_cache.write().await;
-            guard.put(tx_hash, cached);
-        }
+    // pub(crate) async fn enqueue_suspended_tx(
+    //     &self,
+    //     tx: TransactionView,
+    //     cached: CacheEntry,
+    //     remote: Option<(Cycle, PeerIndex)>,
+    // ) -> Result<(), Reject> {
+    //     let tx_hash = tx.hash();
+    //     // let mut chunk = self.chunk.write().await;
+    //     if chunk.add_tx(tx, remote) {
+    //         let mut guard = self.txs_verify_cache.write().await;
+    //         guard.put(tx_hash, cached);
+    //     }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub(crate) async fn _process_tx(
         &self,
@@ -784,9 +781,9 @@ impl TxPoolService {
             let mut tx_pool = self.tx_pool.write().await;
 
             let txs_opt = if is_in_delay_window {
-                {
-                    self.chunk.write().await.clear();
-                }
+                // {
+                //     self.chunk.write().await.clear();
+                // }
                 Some(tx_pool.drain_all_transactions())
             } else {
                 None
@@ -859,10 +856,10 @@ impl TxPoolService {
             orphan.remove_orphan_txs(attached.iter().map(|tx| tx.proposal_short_id()));
         }
 
-        {
-            let mut chunk = self.chunk.write().await;
-            chunk.remove_chunk_txs(attached.iter().map(|tx| tx.proposal_short_id()));
-        }
+        // {
+        //     let mut chunk = self.chunk.write().await;
+        //     chunk.remove_chunk_txs(attached.iter().map(|tx| tx.proposal_short_id()));
+        // }
     }
 
     fn readd_detached_tx(
