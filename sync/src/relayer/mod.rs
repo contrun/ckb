@@ -307,7 +307,7 @@ impl Relayer {
                 unix_time_as_millis()
             );
             let block_hash = boxed.hash();
-            self.shared().state().remove_header_view(&block_hash);
+            self.shared().shared().remove_header_view(&block_hash);
             let cb = packed::CompactBlock::build_from_block(&boxed, &HashSet::new());
             let message = packed::RelayMessage::new_builder().set(cb).build();
 
@@ -490,7 +490,7 @@ impl Relayer {
                     }
                 }
                 BlockStatus::BLOCK_RECEIVED => {
-                    if let Some(uncle) = self.shared.state().get_orphan_block(&uncle_hash) {
+                    if let Some(uncle) = self.shared.shared().get_orphan_block(&uncle_hash) {
                         uncles.push(uncle.as_uncle().data());
                     } else {
                         debug_target!(
@@ -935,14 +935,14 @@ impl CKBProtocolHandler for Relayer {
             }
             ASK_FOR_TXS_TOKEN => self.ask_for_txs(nc.as_ref()),
             TX_HASHES_TOKEN => self.send_bulk_of_tx_hashes(nc.as_ref()),
-            SEARCH_ORPHAN_POOL_TOKEN => {
-                if !self.shared.state().orphan_pool().is_empty() {
-                    tokio::task::block_in_place(|| {
-                        self.shared.try_search_orphan_pool(&self.chain);
-                        self.shared.periodic_clean_orphan_pool();
-                    })
-                }
-            }
+            // SEARCH_ORPHAN_POOL_TOKEN => {
+            //     if !self.shared.state().orphan_pool().is_empty() {
+            //         tokio::task::block_in_place(|| {
+            //             self.shared.try_search_orphan_pool(&self.chain);
+            //             self.shared.periodic_clean_orphan_pool();
+            //         })
+            //     }
+            // }
             _ => unreachable!(),
         }
         trace_target!(
