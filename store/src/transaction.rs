@@ -1,5 +1,5 @@
-use crate::cache::StoreCache;
 use crate::store::ChainStore;
+use crate::{cache::StoreCache, cell::LiveCellCache};
 use ckb_chain_spec::versionbits::VersionbitsIndexer;
 use ckb_db::{
     iter::{DBIter, DBIterator, IteratorMode},
@@ -329,8 +329,10 @@ impl StoreTransaction {
                 Option<packed::CellDataEntry>,
             ),
         >,
-    ) -> Result<(), Error> {
+        mut cache: LiveCellCache,
+    ) -> Result<LiveCellCache, Error> {
         for (out_point, cell, cell_data) in cells {
+            cache = cache.insert_entry(out_point.clone(), &cell);
             let key = out_point.to_cell_key();
             self.insert_raw(COLUMN_CELL, &key, cell.as_slice())?;
             if let Some(data) = cell_data {
@@ -345,21 +347,23 @@ impl StoreTransaction {
                 self.insert_raw(COLUMN_CELL_DATA_HASH, &key, &[])?;
             }
         }
-        Ok(())
+        Ok(cache)
     }
 
     /// TODO(doc): @quake
     pub fn delete_cells(
         &self,
         out_points: impl Iterator<Item = packed::OutPoint>,
-    ) -> Result<(), Error> {
+        mut cache: LiveCellCache,
+    ) -> Result<LiveCellCache, Error> {
         for out_point in out_points {
+            cache = cache.remove(&out_point);
             let key = out_point.to_cell_key();
             self.delete(COLUMN_CELL, &key)?;
             self.delete(COLUMN_CELL_DATA, &key)?;
             self.delete(COLUMN_CELL_DATA_HASH, &key)?;
         }
-        Ok(())
+        Ok(cache)
     }
 
     /// Inserts a header digest.

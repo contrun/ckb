@@ -13,7 +13,9 @@ use ckb_proposal_table::ProposalTable;
 use ckb_rust_unstable_port::IsSorted;
 use ckb_shared::shared::Shared;
 use ckb_stop_handler::{SignalSender, StopHandler};
-use ckb_store::{attach_block_cell, detach_block_cell, ChainStore, StoreTransaction};
+use ckb_store::{
+    attach_block_cell, detach_block_cell, ChainStore, LiveCellCache, StoreTransaction,
+};
 use ckb_systemtime::unix_time_as_millis;
 use ckb_types::{
     core::{
@@ -312,6 +314,7 @@ impl ChainService {
     // Use for testing only, can only truncate less than 50000 blocks each time
     pub(crate) fn truncate(&mut self, target_tip_hash: &Byte32) -> Result<(), Error> {
         let snapshot = Arc::clone(&self.shared.snapshot());
+        let mut live_cell_cache = snapshot.live_cell_cache.clone();
         assert!(snapshot.is_main_chain(target_tip_hash));
 
         let target_tip_header = snapshot.get_block_header(target_tip_hash).expect("checked");
@@ -337,7 +340,7 @@ impl ChainService {
         let mut fork = self.make_fork_for_truncate(&target_tip_header, snapshot.tip_header());
 
         let db_txn = self.shared.store().begin_transaction();
-        self.rollback(&fork, &db_txn)?;
+        live_cell_cache = self.rollback(&fork, &db_txn, live_cell_cache)?;
 
         db_txn.insert_tip_header(&target_tip_header)?;
         db_txn.insert_current_epoch_ext(&target_epoch_ext)?;
@@ -358,6 +361,7 @@ impl ChainService {
             target_block_ext.total_difficulty,
             target_epoch_ext,
             new_proposals,
+            live_cell_cache,
         );
 
         self.shared.store_snapshot(Arc::clone(&new_snapshot));
@@ -466,6 +470,7 @@ impl ChainService {
         }
 
         let shared_snapshot = Arc::clone(&self.shared.snapshot());
+        let mut live_cell_cache = shared_snapshot.live_cell_cache.clone();
         let origin_proposals = shared_snapshot.proposals();
         let current_tip_header = shared_snapshot.tip_header();
 
@@ -477,7 +482,6 @@ impl ChainService {
 
         // is_better_than
         let new_best_block = cannon_total_difficulty > current_total_difficulty;
-
         if new_best_block {
             debug!(
                 "new best block found: {} => {:#x}, difficulty diff = {:#x}",
@@ -486,11 +490,12 @@ impl ChainService {
                 &cannon_total_difficulty - &current_total_difficulty
             );
             self.find_fork(&mut fork, current_tip_header.number(), &block, ext);
-            self.rollback(&fork, &db_txn)?;
+            live_cell_cache = self.rollback(&fork, &db_txn, live_cell_cache)?;
 
             // update and verify chain root
             // MUST update index before reconcile_main_chain
-            self.reconcile_main_chain(Arc::clone(&db_txn), &mut fork, switch)?;
+            live_cell_cache =
+                self.reconcile_main_chain(Arc::clone(&db_txn), &mut fork, switch, live_cell_cache)?;
 
             db_txn.insert_tip_header(&block.header())?;
             if new_epoch || fork.has_detached() {
@@ -519,9 +524,13 @@ impl ChainService {
                 .finalize(origin_proposals, tip_header.number());
             fork.detached_proposal_id = detached_proposal_id;
 
-            let new_snapshot =
-                self.shared
-                    .new_snapshot(tip_header, total_difficulty, epoch, new_proposals);
+            let new_snapshot = self.shared.new_snapshot(
+                tip_header,
+                total_difficulty,
+                epoch,
+                new_proposals,
+                live_cell_cache,
+            );
 
             self.shared.store_snapshot(Arc::clone(&new_snapshot));
 
@@ -618,12 +627,17 @@ impl ChainService {
         }
     }
 
-    pub(crate) fn rollback(&self, fork: &ForkChanges, txn: &StoreTransaction) -> Result<(), Error> {
+    pub(crate) fn rollback(
+        &self,
+        fork: &ForkChanges,
+        txn: &StoreTransaction,
+        mut cache: LiveCellCache,
+    ) -> Result<LiveCellCache, Error> {
         for block in fork.detached_blocks().iter().rev() {
             txn.detach_block(block)?;
-            detach_block_cell(txn, block)?;
+            cache = detach_block_cell(txn, block, cache)?;
         }
-        Ok(())
+        Ok(cache)
     }
 
     fn alignment_fork(
@@ -753,9 +767,10 @@ impl ChainService {
         txn: Arc<StoreTransaction>,
         fork: &mut ForkChanges,
         switch: Switch,
-    ) -> Result<(), Error> {
+        mut cache: LiveCellCache,
+    ) -> Result<LiveCellCache, Error> {
         if fork.attached_blocks().is_empty() {
-            return Ok(());
+            return Ok(cache);
         }
 
         let txs_verify_cache = self.shared.txs_verify_cache();
@@ -780,7 +795,7 @@ impl ChainService {
         let verified_len = fork.verified_len();
         for b in fork.attached_blocks().iter().take(verified_len) {
             txn.attach_block(b)?;
-            attach_block_cell(&txn, b)?;
+            cache = attach_block_cell(&txn, b, cache)?;
             mmr.push(b.digest())
                 .map_err(|e| InternalErrorKind::MMR.other(e))?;
         }
@@ -817,7 +832,7 @@ impl ChainService {
                                         })
                                         .collect();
                                     txn.attach_block(b)?;
-                                    attach_block_cell(&txn, b)?;
+                                    cache = attach_block_cell(&txn, b, cache)?;
                                     mmr.push(b.digest())
                                         .map_err(|e| InternalErrorKind::MMR.other(e))?;
 
@@ -855,7 +870,7 @@ impl ChainService {
                 }
             } else {
                 txn.attach_block(b)?;
-                attach_block_cell(&txn, b)?;
+                cache = attach_block_cell(&txn, b, cache)?;
                 mmr.push(b.digest())
                     .map_err(|e| InternalErrorKind::MMR.other(e))?;
                 self.insert_ok_ext(&txn, &b.header().hash(), ext.clone(), None, None)?;
@@ -868,7 +883,7 @@ impl ChainService {
             trace!("light-client: commit");
             // Before commit, all new MMR nodes are in memory only.
             mmr.commit().map_err(|e| InternalErrorKind::MMR.other(e))?;
-            Ok(())
+            Ok(cache)
         }
     }
 

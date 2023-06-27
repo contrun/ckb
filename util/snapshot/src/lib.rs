@@ -15,9 +15,9 @@ use ckb_merkle_mountain_range::{
     leaf_index_to_mmr_size, Error as MMRError, MMRStore, Result as MMRResult,
 };
 use ckb_proposal_table::ProposalView;
-use ckb_store::{ChainStore, StoreCache, StoreSnapshot};
+use ckb_store::{ChainStore, LiveCellCache, StoreCache, StoreSnapshot};
 use ckb_traits::{HeaderFields, HeaderFieldsProvider, HeaderProvider};
-use ckb_types::core::error::OutPointError;
+use ckb_types::core::{cell::CellMeta, error::OutPointError};
 use ckb_types::{
     core::{
         cell::{CellChecker, CellProvider, CellStatus, HeaderChecker},
@@ -68,6 +68,7 @@ pub struct Snapshot {
     store: StoreSnapshot,
     proposals: ProposalView,
     consensus: Arc<Consensus>,
+    pub live_cell_cache: LiveCellCache,
 }
 
 impl Hash for Snapshot {
@@ -99,6 +100,7 @@ impl Snapshot {
         store: StoreSnapshot,
         proposals: ProposalView,
         consensus: Arc<Consensus>,
+        live_cell_cache: LiveCellCache,
     ) -> Snapshot {
         Snapshot {
             tip_header,
@@ -107,6 +109,7 @@ impl Snapshot {
             store,
             proposals,
             consensus,
+            live_cell_cache,
         }
     }
 
@@ -121,6 +124,7 @@ impl Snapshot {
             epoch_ext: self.epoch_ext.clone(),
             proposals: self.proposals.clone(),
             consensus: Arc::clone(&self.consensus),
+            live_cell_cache: self.live_cell_cache.clone(),
         }
     }
 
@@ -230,17 +234,27 @@ impl VersionbitsIndexer for Snapshot {
 
 impl CellProvider for Snapshot {
     fn cell(&self, out_point: &OutPoint, eager_load: bool) -> CellStatus {
-        match self.get_cell(out_point) {
-            Some(mut cell_meta) => {
-                if eager_load {
-                    if let Some((data, data_hash)) = self.get_cell_data(out_point) {
-                        cell_meta.mem_cell_data = Some(data);
-                        cell_meta.mem_cell_data_hash = Some(data_hash);
-                    }
+        if let Some(mut cell_meta) = self.live_cell_cache.get(out_point).cloned() {
+            if eager_load {
+                if let Some((data, data_hash)) = self.get_cell_data(out_point) {
+                    cell_meta.mem_cell_data = Some(data);
+                    cell_meta.mem_cell_data_hash = Some(data_hash);
                 }
-                CellStatus::live_cell(cell_meta)
             }
-            None => CellStatus::Unknown,
+            CellStatus::live_cell(cell_meta)
+        } else {
+            match self.get_cell(out_point) {
+                Some(mut cell_meta) => {
+                    if eager_load {
+                        if let Some((data, data_hash)) = self.get_cell_data(out_point) {
+                            cell_meta.mem_cell_data = Some(data);
+                            cell_meta.mem_cell_data_hash = Some(data_hash);
+                        }
+                    }
+                    CellStatus::live_cell(cell_meta)
+                }
+                None => CellStatus::Unknown,
+            }
         }
     }
 }

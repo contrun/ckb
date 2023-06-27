@@ -20,8 +20,8 @@ use ckb_proposal_table::ProposalView;
 use ckb_shared::Shared;
 use ckb_snapshot::{Snapshot, SnapshotMgr};
 use ckb_stop_handler::StopHandler;
-use ckb_store::ChainDB;
 use ckb_store::ChainStore;
+use ckb_store::{ChainDB, LiveCellCache};
 use ckb_tx_pool::{
     error::Reject, service::TxVerificationResult, TokioRwLock, TxEntry, TxPool,
     TxPoolServiceBuilder,
@@ -301,6 +301,7 @@ impl SharedBuilder {
             store.get_snapshot(),
             proposal_view,
             consensus,
+            LiveCellCache::new(),
         );
 
         Ok((snapshot, proposal_table))

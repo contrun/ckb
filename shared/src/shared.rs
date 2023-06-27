@@ -11,7 +11,7 @@ use ckb_error::{AnyError, Error};
 use ckb_notify::NotifyController;
 use ckb_proposal_table::ProposalView;
 use ckb_stop_handler::{SignalSender, StopHandler};
-use ckb_store::{ChainDB, ChainStore};
+use ckb_store::{ChainDB, ChainStore, LiveCellCache};
 use ckb_systemtime::unix_time_as_millis;
 use ckb_tx_pool::{BlockTemplate, TokioRwLock, TxPoolController};
 use ckb_types::{
@@ -313,6 +313,7 @@ impl Shared {
         total_difficulty: U256,
         epoch_ext: EpochExt,
         proposals: ProposalView,
+        live_cell_cache: LiveCellCache,
     ) -> Arc<Snapshot> {
         Arc::new(Snapshot::new(
             tip_header,
@@ -321,6 +322,7 @@ impl Shared {
             self.store.get_snapshot(),
             proposals,
             Arc::clone(&self.consensus),
+            live_cell_cache,
         ))
     }
 

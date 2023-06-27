@@ -20,6 +20,7 @@ ckb-app-config = { path = "../util/app-config", version = "= 0.112.0-pre" }
 ckb-db-schema = { path = "../db-schema", version = "= 0.112.0-pre" }
 ckb-freezer = { path = "../freezer", version = "= 0.112.0-pre" }
 ckb-merkle-mountain-range = "0.5.2"
+rpds = "0.13.0"
 
 [dev-dependencies]
 tempfile.workspace = true

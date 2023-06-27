@@ -1,6 +1,11 @@
 use crate::{ChainStore, StoreTransaction};
 use ckb_error::Error;
 use ckb_types::{core::BlockView, packed, prelude::*};
+use ckb_types::{
+    core::{cell::CellMeta, TransactionInfo},
+    packed::OutPoint,
+};
+use rpds::{HashTrieMap, HashTrieMapSync, Queue, QueueSync};
 use std::collections::HashMap;
 
 /**
@@ -22,8 +27,62 @@ use std::collections::HashMap;
  *  }
  */
 
+const LIVE_CELL_CACHE_LIMIT: usize = 20000;
+
+#[derive(Debug, Clone)]
+pub struct LiveCellCache {
+    cache: HashTrieMapSync<OutPoint, CellMeta>,
+}
+
+fn build_cell_meta_from_entry(out_point: OutPoint, entry: &packed::CellEntry) -> CellMeta {
+    CellMeta {
+        out_point,
+        cell_output: entry.output(),
+        transaction_info: Some(TransactionInfo {
+            block_number: entry.block_number().unpack(),
+            block_hash: entry.block_hash(),
+            block_epoch: entry.block_epoch().unpack(),
+            index: entry.index().unpack(),
+        }),
+        data_bytes: entry.data_size().unpack(),
+        mem_cell_data: None,
+        mem_cell_data_hash: None,
+    }
+}
+
+impl LiveCellCache {
+    pub fn new() -> LiveCellCache {
+        LiveCellCache {
+            cache: HashTrieMap::new_sync(),
+        }
+    }
+
+    pub fn insert(&mut self, key: OutPoint, value: CellMeta) -> LiveCellCache {
+        let cache = self.cache.insert(key.clone(), value);
+        LiveCellCache { cache }
+    }
+
+    pub fn insert_entry(&mut self, key: OutPoint, entry: &packed::CellEntry) -> LiveCellCache {
+        let cell_meta = build_cell_meta_from_entry(key.clone(), entry);
+        self.insert(key, cell_meta)
+    }
+
+    pub fn remove(&mut self, key: &OutPoint) -> LiveCellCache {
+        let cache = self.cache.remove(key);
+        LiveCellCache { cache }
+    }
+
+    pub fn get(&self, key: &OutPoint) -> Option<&CellMeta> {
+        self.cache.get(key)
+    }
+}
+
 // Apply the effects of this block on the live cell set.
-pub fn attach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<(), Error> {
+pub fn attach_block_cell(
+    txn: &StoreTransaction,
+    block: &BlockView,
+    mut cache: LiveCellCache,
+) -> Result<LiveCellCache, Error> {
     let transactions = block.transactions();
 
     // add new live cells
@@ -68,7 +127,7 @@ pub fn attach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<()
                     (out_point, entry, data_entry)
                 })
         });
-    txn.insert_cells(new_cells)?;
+    cache = txn.insert_cells(new_cells, cache)?;
 
     // mark inputs dead
     // skip cellbase
@@ -76,13 +135,17 @@ pub fn attach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<()
         .iter()
         .skip(1)
         .flat_map(|tx| tx.input_pts_iter());
-    txn.delete_cells(deads)?;
+    cache = txn.delete_cells(deads, cache)?;
 
-    Ok(())
+    Ok(cache)
 }
 
 /// Undoes the effects of this block on the live cell set.
-pub fn detach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<(), Error> {
+pub fn detach_block_cell(
+    txn: &StoreTransaction,
+    block: &BlockView,
+    mut cache: LiveCellCache,
+) -> Result<LiveCellCache, Error> {
     let transactions = block.transactions();
     let mut input_pts = HashMap::with_capacity(transactions.len());
 
@@ -141,11 +204,11 @@ pub fn detach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<()
                 })
         })
         .flatten();
-    txn.insert_cells(undo_deads)?;
+    cache = txn.insert_cells(undo_deads, cache)?;
 
     // undo live cells
     let undo_cells = transactions.iter().flat_map(|tx| tx.output_pts_iter());
-    txn.delete_cells(undo_cells)?;
+    cache = txn.delete_cells(undo_cells, cache)?;
 
-    Ok(())
+    Ok(cache)
 }

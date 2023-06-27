@@ -16,7 +16,7 @@ mod write_batch;
 mod tests;
 
 pub use cache::StoreCache;
-pub use cell::{attach_block_cell, detach_block_cell};
+pub use cell::{attach_block_cell, detach_block_cell, LiveCellCache};
 pub use db::ChainDB;
 pub use snapshot::StoreSnapshot;
 pub use store::ChainStore;

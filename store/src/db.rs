@@ -1,9 +1,9 @@
-use crate::cache::StoreCache;
 use crate::cell::attach_block_cell;
 use crate::store::ChainStore;
 use crate::transaction::StoreTransaction;
 use crate::write_batch::StoreWriteBatch;
 use crate::StoreSnapshot;
+use crate::{cache::StoreCache, cell::LiveCellCache};
 use ckb_app_config::StoreConfig;
 use ckb_chain_spec::{consensus::Consensus, versionbits::VersionbitsIndexer};
 use ckb_db::{
@@ -183,7 +183,7 @@ impl ChainDB {
             txs_sizes: Some(vec![]),
         };
 
-        attach_block_cell(&db_txn, genesis)?;
+        attach_block_cell(&db_txn, genesis, LiveCellCache::new())?;
         let last_block_hash_in_previous_epoch = epoch.last_block_hash_in_previous_epoch();
 
         db_txn.insert_block(genesis)?;
