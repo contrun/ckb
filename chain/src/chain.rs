@@ -91,12 +91,25 @@ impl ChainController {
         self.internal_process_lonely_block(lonely_block)
     }
 
+    pub fn process_block_with_callback(
+        &self,
+        block: Arc<BlockView>,
+        verify_callback: Box<dyn FnOnce(Result<(), ckb_error::Error>) + Send + Sync>,
+    ) {
+        self.internal_process_lonely_block(LonelyBlock {
+            block,
+            peer_id: None,
+            switch: None,
+            verify_callback: Some(verify_callback),
+        })
+    }
+
     pub fn process_block(&self, block: Arc<BlockView>) {
         self.internal_process_lonely_block(LonelyBlock {
             block,
             peer_id: None,
             switch: None,
-            verify_ok_callback: None,
+            verify_callback: None,
         })
     }
 
@@ -105,7 +118,7 @@ impl ChainController {
             block,
             peer_id: None,
             switch: Some(switch),
-            verify_ok_callback: None,
+            verify_callback: None,
         })
     }
 
@@ -178,8 +191,7 @@ pub struct LonelyBlock {
     pub peer_id: Option<PeerIndex>,
     pub switch: Option<Switch>,
 
-    pub verify_ok_callback: Option<Box<dyn FnOnce(Result<(), ckb_error::Error>) + Send + Sync>>,
-    // pub verify_failed_callback: Option<F>,
+    pub verify_callback: Option<Box<dyn FnOnce(Result<(), ckb_error::Error>) + Send + Sync>>,
 }
 
 impl LonelyBlock {
@@ -188,7 +200,7 @@ impl LonelyBlock {
             block: self.block,
             peer_id: self.peer_id,
             switch,
-            verify_ok_callback: self.verify_ok_callback,
+            verify_callback: self.verify_callback,
             parent_header,
         }
     }
@@ -198,7 +210,7 @@ struct UnverifiedBlock {
     pub block: Arc<BlockView>,
     pub peer_id: Option<PeerIndex>,
     pub switch: Switch,
-    pub verify_ok_callback: Option<Box<dyn FnOnce(Result<(), ckb_error::Error>) + Send + Sync>>,
+    pub verify_callback: Option<Box<dyn FnOnce(Result<(), ckb_error::Error>) + Send + Sync>>,
     pub parent_header: HeaderView,
 }
 
@@ -333,8 +345,17 @@ impl ChainService {
                     Ok(unverified_task) => {
                     // process this unverified block
                         trace!("got an unverified block, wait cost: {:?}", begin_loop.elapsed());
-                        self.consume_unverified_blocks(unverified_task);
+                        let verify_result = self.consume_unverified_blocks(&unverified_task);
                         trace!("consume_unverified_blocks cost: {:?}", begin_loop.elapsed());
+
+                        match unverified_task.verify_callback {
+                            Some(callback) => {
+                                debug!("executing block {}-{} verify_callback", unverified_task.block.number(), unverified_task.block.hash());
+                                callback(verify_result);
+                            },
+                            None => {
+                            }
+                        }
                     },
                     Err(err) => {
                         error!("unverified_block_rx err: {}", err);
@@ -346,9 +367,10 @@ impl ChainService {
         }
     }
 
-    fn consume_unverified_blocks(&self, unverified_block: UnverifiedBlock) {
+    fn consume_unverified_blocks(&self, unverified_block: &UnverifiedBlock) -> Result<(), Error> {
         // process this unverified block
-        match self.verify_block(&unverified_block) {
+        let verify_result = self.verify_block(unverified_block);
+        match &verify_result {
             Ok(_) => {
                 let log_now = std::time::Instant::now();
                 self.shared
@@ -362,24 +384,6 @@ impl ChainService {
                     log_elapsed_remove_block_status,
                     log_now.elapsed()
                 );
-
-                // start execute this block's callback function
-                match (
-                    unverified_block.verify_ok_callback,
-                    unverified_block.peer_id,
-                ) {
-                    (Some(verify_ok_callback), Some(peer_id)) => {
-                        verify_ok_callback(Ok(()));
-                    }
-                    (Some(verify_ok_callback), None) => {
-                        error!(
-                            "block {} have verify_ok_callback, but have no peer_id, this should not happen",
-                            unverified_block.block.hash()
-                        );
-                        verify_ok_callback(Ok(()))
-                    }
-                    _ => {}
-                }
             }
             Err(err) => {
                 error!(
@@ -388,16 +392,6 @@ impl ChainService {
                     unverified_block.block.hash(),
                     err
                 );
-                if let Some(peer_id) = unverified_block.peer_id {
-                    // if let Err(_) = self.verify_failed_blocks_tx.send(VerifyFailedBlockInfo {
-                    //     block_hash: unverified_block.block.hash(),
-                    //     peer_id,
-                    //     message_bytes: 0,
-                    //     reason: "".to_string(),
-                    // }) {
-                    //     error!("ChainService want to send VerifyFailedBlockInfo to Synchronizer, but Synchronizer has dropped the receiver");
-                    // }
-                }
 
                 let tip = self
                     .shared
@@ -427,6 +421,7 @@ impl ChainService {
                 );
             }
         }
+        verify_result
     }
 
     fn start_search_orphan_pool(
@@ -663,7 +658,13 @@ impl ChainService {
             if !switch.disable_non_contextual() {
                 let result = self.non_contextual_verify(&lonely_block.block);
                 match result {
-                    Err(err) => {}
+                    Err(err) => match lonely_block.verify_callback {
+                        Some(verify_callback) => {
+                            verify_callback(Err(err));
+                            return;
+                        }
+                        None => {}
+                    },
                     _ => {}
                 }
             }
@@ -715,6 +716,13 @@ impl ChainService {
             .get_block_ext(&block.data().header().raw().parent_hash())
             .expect("parent already store");
 
+        if parent_ext.verified == Some(false) {
+            return Err(InvalidParentError {
+                parent_hash: parent_header.hash(),
+            }
+            .into());
+        }
+
         let cannon_total_difficulty =
             parent_ext.total_difficulty.to_owned() + block.header().difficulty();
 
@@ -724,13 +732,6 @@ impl ChainService {
         let _snapshot_block_ext = db_txn.get_update_for_block_ext(&block.hash(), &txn_snapshot);
 
         db_txn.insert_block(block.as_ref())?;
-
-        // if parent_ext.verified == Some(false) {
-        //     return Err(InvalidParentError {
-        //         parent_hash: parent_header.hash(),
-        //     }
-        //     .into());
-        // }
 
         let next_block_epoch = self
             .shared
@@ -768,14 +769,14 @@ impl ChainService {
         Ok(Some((parent_header, cannon_total_difficulty)))
     }
 
-    fn verify_block(&self, unverified_block: &UnverifiedBlock) -> Result<bool, Error> {
+    fn verify_block(&self, unverified_block: &UnverifiedBlock) -> Result<(), Error> {
         let log_now = std::time::Instant::now();
 
         let UnverifiedBlock {
             block,
             peer_id,
             switch,
-            verify_ok_callback,
+            verify_callback,
             parent_header,
         } = unverified_block;
 
@@ -794,7 +795,7 @@ impl ChainService {
                         block.hash(),
                         verified
                     );
-                    return Ok(verified);
+                    return Ok(());
                 }
                 _ => {}
             }
@@ -933,7 +934,7 @@ impl ChainService {
                 }
             }
         }
-        Ok(true)
+        Ok(())
     }
 
     fn insert_block(&mut self, block: Arc<BlockView>, switch: Switch) -> Result<bool, Error> {
