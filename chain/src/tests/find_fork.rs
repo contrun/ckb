@@ -1,4 +1,5 @@
-use crate::chain::{ChainService, ForkChanges};
+use crate::chain::ChainService;
+use crate::forkchanges::ForkChanges;
 use crate::tests::util::{MockChain, MockStore};
 use ckb_chain_spec::consensus::{Consensus, ProposalWindow};
 use ckb_shared::SharedBuilder;
