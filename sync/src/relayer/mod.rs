@@ -343,7 +343,7 @@ impl Relayer {
             &self.chain,
             Arc::clone(&block),
             peer,
-            verify_success_callback,
+            Box::new(verify_success_callback),
         );
     }
 
