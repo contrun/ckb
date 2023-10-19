@@ -45,20 +45,20 @@ fn test_dead_cell_in_same_block() {
 
     for block in chain1.blocks() {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     for block in chain2.blocks().iter().take(switch_fork_number + 1) {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     assert_error_eq!(
         OutPointError::Dead(OutPoint::new(tx1_hash, 0)),
         chain_controller
-            .internal_process_block(
+            .blocking_process_block_with_switch(
                 Arc::new(chain2.blocks()[switch_fork_number + 1].clone()),
                 Switch::DISABLE_EPOCH,
             )
@@ -100,20 +100,20 @@ fn test_dead_cell_in_different_block() {
 
     for block in chain1.blocks() {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     for block in chain2.blocks().iter().take(switch_fork_number + 2) {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     assert_error_eq!(
         OutPointError::Unknown(OutPoint::new(tx1_hash, 0)),
         chain_controller
-            .internal_process_block(
+            .blocking_process_block_with_switch(
                 Arc::new(chain2.blocks()[switch_fork_number + 2].clone()),
                 Switch::DISABLE_EPOCH,
             )
@@ -156,20 +156,20 @@ fn test_invalid_out_point_index_in_same_block() {
 
     for block in chain1.blocks() {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     for block in chain2.blocks().iter().take(switch_fork_number + 1) {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     assert_error_eq!(
         OutPointError::Unknown(OutPoint::new(tx1_hash, 1)),
         chain_controller
-            .internal_process_block(
+            .blocking_process_block_with_switch(
                 Arc::new(chain2.blocks()[switch_fork_number + 1].clone()),
                 Switch::DISABLE_EPOCH,
             )
@@ -213,20 +213,20 @@ fn test_invalid_out_point_index_in_different_blocks() {
 
     for block in chain1.blocks() {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     for block in chain2.blocks().iter().take(switch_fork_number + 2) {
         chain_controller
-            .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+            .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
             .expect("process block ok");
     }
 
     assert_error_eq!(
         OutPointError::Unknown(OutPoint::new(tx1_hash, 1)),
         chain_controller
-            .internal_process_block(
+            .blocking_process_block_with_switch(
                 Arc::new(chain2.blocks()[switch_fork_number + 2].clone()),
                 Switch::DISABLE_EPOCH,
             )
@@ -270,7 +270,7 @@ fn test_full_dead_transaction() {
         .build();
 
     chain_controller
-        .internal_process_block(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
+        .blocking_process_block_with_switch(Arc::new(block.clone()), Switch::DISABLE_EPOCH)
         .expect("process block ok");
 
     mock_store.insert_block(&block, &epoch);
@@ -345,7 +345,7 @@ fn test_full_dead_transaction() {
                     .build()
             };
             chain_controller
-                .internal_process_block(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
                 .expect("process block ok");
             mock_store.insert_block(&new_block, &epoch);
             parent = new_block.header().to_owned();
@@ -425,7 +425,7 @@ fn test_full_dead_transaction() {
                         .build()
                 };
                 chain_controller
-                    .internal_process_block(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                    .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
                     .expect("process block ok");
                 mock_store.insert_block(&new_block, &epoch);
                 parent = new_block.header().to_owned();
@@ -494,7 +494,7 @@ fn test_full_dead_transaction() {
                         .build()
                 };
                 chain_controller
-                    .internal_process_block(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                    .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
                     .expect("process block ok");
                 mock_store.insert_block(&new_block, &epoch);
                 parent = new_block.header().to_owned();
