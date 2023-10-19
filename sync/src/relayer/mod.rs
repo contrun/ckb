@@ -295,7 +295,7 @@ impl Relayer {
     #[allow(clippy::needless_collect)]
     pub fn accept_block(
         &self,
-        nc: &dyn CKBProtocolContext,
+        _nc: &dyn CKBProtocolContext,
         peer: PeerIndex,
         block: core::BlockView,
     ) {
