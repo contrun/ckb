@@ -1,9 +1,10 @@
-use crate::chain::{ChainController, VerifiedBlockStatus};
 use crate::tests::util::{
     create_always_success_tx, create_cellbase, create_multi_outputs_transaction,
     create_transaction, create_transaction_with_out_point, dao_data, start_chain, MockChain,
     MockStore,
 };
+use crate::ChainController;
+use crate::VerifiedBlockStatus;
 use ckb_chain_spec::consensus::{Consensus, ConsensusBuilder};
 use ckb_dao_utils::genesis_dao_data;
 use ckb_error::assert_error_eq;
