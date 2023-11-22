@@ -275,12 +275,11 @@ struct CKBHandler {
 #[async_trait]
 impl ServiceProtocol for CKBHandler {
     async fn init(&mut self, context: &mut ProtocolContext) {
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         self.handler.init(Arc::new(nc)).await;
     }
 
@@ -311,12 +310,11 @@ impl ServiceProtocol for CKBHandler {
             return;
         }
 
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         let peer_index = context.session.id;
 
         self.handler
@@ -335,12 +333,11 @@ impl ServiceProtocol for CKBHandler {
             return;
         }
 
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         let peer_index = context.session.id;
         self.handler.disconnected(Arc::new(nc), peer_index).await;
     }
@@ -356,12 +353,11 @@ impl ServiceProtocol for CKBHandler {
             context.session.id,
             data.len()
         );
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         let peer_index = context.session.id;
         self.handler.received(Arc::new(nc), peer_index, data).await;
     }
@@ -370,22 +366,20 @@ impl ServiceProtocol for CKBHandler {
         if !self.network_state.is_active() {
             return;
         }
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         self.handler.notify(Arc::new(nc), token).await;
     }
 
     async fn poll(&mut self, context: &mut ProtocolContext) -> Option<()> {
-        let nc = DefaultCKBProtocolContext {
-            proto_id: self.proto_id,
-            network_state: Arc::clone(&self.network_state),
-            p2p_control: context.control().to_owned().into(),
-            async_p2p_control: context.control().to_owned(),
-        };
+        let nc = DefaultCKBProtocolContext::new(
+            self.proto_id,
+            Arc::clone(&self.network_state),
+            context.control().to_owned(),
+        );
         self.handler.poll(Arc::new(nc)).await
     }
 }
@@ -395,6 +389,21 @@ struct DefaultCKBProtocolContext {
     network_state: Arc<NetworkState>,
     p2p_control: ServiceControl,
     async_p2p_control: ServiceAsyncControl,
+}
+
+impl DefaultCKBProtocolContext {
+    pub fn new(
+        proto_id: ProtocolId,
+        network_state: Arc<NetworkState>,
+        async_p2p_control: ServiceAsyncControl,
+    ) -> Self {
+        Self {
+            proto_id,
+            network_state,
+            p2p_control: async_p2p_control.clone().into(),
+            async_p2p_control,
+        }
+    }
 }
 
 #[async_trait]

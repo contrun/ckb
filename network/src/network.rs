@@ -920,8 +920,10 @@ impl NetworkService {
         // == Build background service tasks
         let dump_peer_store_service = DumpPeerStoreService::new(Arc::clone(&network_state));
         let protocol_type_checker_service = ProtocolTypeCheckerService::new(
-            Arc::clone(&network_state),
-            p2p_service.control().to_owned().into(),
+            InnerNetworkController {
+                p2p_control: p2p_service.control().to_owned().into(),
+                network_state: Arc::clone(&network_state),
+            },
             required_protocol_ids,
         );
         let mut bg_services = vec![

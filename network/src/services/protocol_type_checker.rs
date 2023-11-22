@@ -8,13 +8,14 @@
 /// 2. feeler: only open feeler protocol is open.
 ///
 /// Other protocols will be closed after a timeout.
-use crate::{network::disconnect_with_message, NetworkState, Peer, ProtocolId, SupportProtocols};
+use crate::{
+    network::{disconnect_with_message, InnerNetworkController}, Peer, ProtocolId, SupportProtocols,
+};
 use ckb_logger::debug;
 use futures::Future;
-use p2p::service::ServiceControl;
+
 use std::{
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
     time::{Duration, Instant},
 };
@@ -58,28 +59,25 @@ impl std::fmt::Display for ProtocolTypeError {
 /// Periodically check whether all connections are normally open sync protocol,
 /// if not, close the connection
 pub struct ProtocolTypeCheckerService {
-    network_state: Arc<NetworkState>,
-    p2p_control: ServiceControl,
+    controller: InnerNetworkController,
     interval: Option<Interval>,
     fully_open_required_protocol_ids: Vec<ProtocolId>,
 }
 
 impl ProtocolTypeCheckerService {
     pub fn new(
-        network_state: Arc<NetworkState>,
-        p2p_control: ServiceControl,
+        controller: InnerNetworkController,
         fully_open_required_protocol_ids: Vec<ProtocolId>,
     ) -> Self {
         ProtocolTypeCheckerService {
-            network_state,
-            p2p_control,
+            controller,
             interval: None,
             fully_open_required_protocol_ids,
         }
     }
 
     pub(crate) fn check_protocol_type(&self) {
-        self.network_state.with_peer_registry(|reg| {
+        self.controller.network_state().with_peer_registry(|reg| {
             let now = Instant::now();
             for (session_id, peer) in reg.peers() {
                 // skip just connected peers
@@ -94,7 +92,7 @@ impl ProtocolTypeCheckerService {
                         peer.connected_addr, err
                     );
                     if let Err(err) = disconnect_with_message(
-                        &self.p2p_control,
+                        self.controller.p2p_control(),
                         *session_id,
                         &format!("open protocols error: {err}"),
                     ) {
