@@ -1038,21 +1038,29 @@ impl NetworkService {
 
     /// Start the network in the background and return a controller
     pub fn start<S: Spawn>(self, handle: &S) -> Result<NetworkController, Error> {
-        let config = self.network_state.config.clone();
+        let Self {
+            mut p2p_service,
+            network_state,
+            ping_controller,
+            bg_services,
+            version,
+        } = self;
 
-        let p2p_control: ServiceControl = self.p2p_service.control().to_owned().into();
+        let config = network_state.config.clone();
+
+        let p2p_control: ServiceControl = p2p_service.control().to_owned().into();
 
         // dial whitelist_nodes
-        for addr in self.network_state.config.whitelist_peers() {
+        for addr in network_state.config.whitelist_peers() {
             debug!("dial whitelist_peers {:?}", addr);
-            self.network_state.dial_identify(&p2p_control, addr);
+            network_state.dial_identify(&p2p_control, addr);
         }
 
-        let target = &self.network_state.required_flags;
+        let target = &network_state.required_flags;
 
         // get bootnodes
         // try get addrs from peer_store, if peer_store have no enough addrs then use bootnodes
-        let bootnodes = self.network_state.with_peer_store_mut(|peer_store| {
+        let bootnodes = network_state.with_peer_store_mut(|peer_store| {
             let count = max((config.max_outbound_peers >> 1) as usize, 1);
             let mut addrs: Vec<_> = peer_store
                 .fetch_addrs_to_attempt(count, *target)
@@ -1060,8 +1068,7 @@ impl NetworkService {
                 .map(|paddr| paddr.addr)
                 .collect();
             // Get bootnodes randomly
-            let bootnodes = self
-                .network_state
+            let bootnodes = network_state
                 .bootnodes
                 .iter()
                 .choose_multiple(&mut rand::thread_rng(), count.saturating_sub(addrs.len()))
@@ -1074,16 +1081,8 @@ impl NetworkService {
         // dial half bootnodes
         for addr in bootnodes {
             debug!("dial bootnode {:?}", addr);
-            self.network_state.dial_identify(&p2p_control, addr);
+            network_state.dial_identify(&p2p_control, addr);
         }
-
-        let Self {
-            mut p2p_service,
-            network_state,
-            ping_controller,
-            bg_services,
-            version,
-        } = self;
 
         // NOTE: for ensure background task finished
         let (bg_signals, bg_receivers): (Vec<_>, Vec<_>) = bg_services
