@@ -75,8 +75,8 @@ pub struct NetworkState {
     dialing_addrs: RwLock<HashMap<PeerId, Instant>>,
     /// Node public addresses,
     /// includes manually public addrs and remote peer observed addrs
-    public_addrs: RwLock<HashSet<Multiaddr>>,
-    pending_observed_addrs: RwLock<HashSet<Multiaddr>>,
+    pub(crate) public_addrs: RwLock<HashSet<Multiaddr>>,
+    pub(crate) pending_observed_addrs: RwLock<HashSet<Multiaddr>>,
     local_private_key: secio::SecioKeyPair,
     local_peer_id: PeerId,
     pub(crate) bootnodes: Vec<Multiaddr>,
@@ -312,10 +312,6 @@ impl NetworkState {
             .collect()
     }
 
-    pub(crate) fn add_node(&self, p2p_control: &ServiceControl, address: Multiaddr) {
-        self.dial_identify(p2p_control, address);
-    }
-
     /// use a filter to get protocol id list
     pub fn get_protocol_ids<F: Fn(ProtocolId) -> bool>(&self, filter: F) -> Vec<ProtocolId> {
         self.protocols
@@ -397,83 +393,6 @@ impl NetworkState {
 
         if let Some(peer_id) = extract_peer_id(addr) {
             self.dialing_addrs.write().remove(&peer_id);
-        }
-    }
-
-    /// Dial
-    /// return value indicates the dialing is actually sent or denied.
-    fn dial_inner(
-        &self,
-        p2p_control: &ServiceControl,
-        addr: Multiaddr,
-        target: TargetProtocol,
-    ) -> Result<(), Error> {
-        if !self.can_dial(&addr) {
-            return Err(Error::Dial(format!("ignore dialing addr {addr}")));
-        }
-
-        debug!("dialing {addr}");
-        p2p_control.dial(addr.clone(), target)?;
-        self.dialing_addrs.write().insert(
-            extract_peer_id(&addr).expect("verified addr"),
-            Instant::now(),
-        );
-        Ok(())
-    }
-
-    /// Dial just identify protocol
-    pub fn dial_identify(&self, p2p_control: &ServiceControl, addr: Multiaddr) {
-        if let Err(err) = self.dial_inner(
-            p2p_control,
-            addr,
-            TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
-        ) {
-            debug!("dial_identify error: {err}");
-        }
-    }
-
-    /// Dial just feeler protocol
-    pub fn dial_feeler(&self, p2p_control: &ServiceControl, addr: Multiaddr) {
-        if let Err(err) = self.dial_inner(
-            p2p_control,
-            addr.clone(),
-            TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
-        ) {
-            debug!("dial_feeler error {err}");
-        } else {
-            self.with_peer_registry_mut(|reg| {
-                reg.add_feeler(&addr);
-            });
-        }
-    }
-
-    /// this method is intent to check observed addr by dial to self
-    pub(crate) fn try_dial_observed_addrs(&self, p2p_control: &ServiceControl) {
-        let mut pending_observed_addrs = self.pending_observed_addrs.write();
-        if pending_observed_addrs.is_empty() {
-            let addrs = self.public_addrs.read();
-            if addrs.is_empty() {
-                return;
-            }
-            // random get addr
-            if let Some(addr) = addrs.iter().choose(&mut rand::thread_rng()) {
-                if let Err(err) = p2p_control.dial(
-                    addr.clone(),
-                    TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
-                ) {
-                    trace!("try_dial_observed_addrs fail {err} on public address")
-                }
-            }
-        } else {
-            for addr in pending_observed_addrs.drain() {
-                trace!("try dial observed addr: {:?}", addr);
-                if let Err(err) = p2p_control.dial(
-                    addr,
-                    TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
-                ) {
-                    trace!("try_dial_observed_addrs fail {err} on pending observed")
-                }
-            }
         }
     }
 
@@ -1011,8 +930,10 @@ impl NetworkService {
         ];
         if config.outbound_peer_service_enabled() {
             let outbound_peer_service = OutboundPeerService::new(
-                Arc::clone(&network_state),
-                p2p_service.control().to_owned().into(),
+                InnerNetworkController {
+                    network_state: Arc::clone(&network_state),
+                    p2p_control: p2p_service.control().to_owned().into(),
+                },
                 Duration::from_secs(config.connect_outbound_interval_secs),
             );
             bg_services.push(Box::pin(outbound_peer_service) as Pin<Box<_>>);
@@ -1050,10 +971,21 @@ impl NetworkService {
 
         let p2p_control: ServiceControl = p2p_service.control().to_owned().into();
 
+        let controller = NetworkController {
+            inner: InnerNetworkController {
+                network_state,
+                p2p_control: p2p_control.clone(),
+            },
+            version,
+            ping_controller,
+        };
+
+        let network_state = controller.network_state();
+
         // dial whitelist_nodes
         for addr in network_state.config.whitelist_peers() {
             debug!("dial whitelist_peers {:?}", addr);
-            network_state.dial_identify(&p2p_control, addr);
+            controller.inner.dial_identify(addr);
         }
 
         let target = &network_state.required_flags;
@@ -1081,7 +1013,7 @@ impl NetworkService {
         // dial half bootnodes
         for addr in bootnodes {
             debug!("dial bootnode {:?}", addr);
-            network_state.dial_identify(&p2p_control, addr);
+            controller.inner.dial_identify(addr);
         }
 
         // NOTE: for ensure background task finished
@@ -1159,38 +1091,89 @@ impl NetworkService {
             return Err(e);
         }
 
-        Ok(NetworkController {
-            version,
-            network_state,
-            p2p_control,
-            ping_controller,
-        })
+        Ok(controller)
+    }
+}
+
+///
+#[derive(Clone)]
+pub struct InnerNetworkController {
+    network_state: Arc<NetworkState>,
+    p2p_control: ServiceControl,
+}
+
+impl InnerNetworkController {
+    pub fn network_state(&self) -> &Arc<NetworkState> {
+        &self.network_state
+    }
+
+    pub fn p2p_control(&self) -> &ServiceControl {
+        &self.p2p_control
+    }
+
+    /// Dial
+    /// return value indicates the dialing is actually sent or denied.
+    fn dial_inner(&self, addr: Multiaddr, target: TargetProtocol) -> Result<(), Error> {
+        if !self.network_state.can_dial(&addr) {
+            return Err(Error::Dial(format!("ignore dialing addr {addr}")));
+        }
+
+        debug!("dialing {addr}");
+        self.p2p_control.dial(addr.clone(), target)?;
+        self.network_state.dialing_addrs.write().insert(
+            extract_peer_id(&addr).expect("verified addr"),
+            Instant::now(),
+        );
+        Ok(())
+    }
+
+    /// Dial just identify protocol
+    pub fn dial_identify(&self, addr: Multiaddr) {
+        if let Err(err) = self.dial_inner(
+            addr,
+            TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
+        ) {
+            debug!("dial_identify error: {err}");
+        }
+    }
+
+    /// Dial just feeler protocol
+    pub fn dial_feeler(&mut self, addr: Multiaddr) {
+        if let Err(err) = self.dial_inner(
+            addr.clone(),
+            TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
+        ) {
+            debug!("dial_feeler error {err}");
+        } else {
+            self.network_state.with_peer_registry_mut(|reg| {
+                reg.add_feeler(&addr);
+            });
+        }
     }
 }
 
 /// Network controller
 #[derive(Clone)]
 pub struct NetworkController {
+    inner: InnerNetworkController,
     version: String,
-    network_state: Arc<NetworkState>,
-    p2p_control: ServiceControl,
     ping_controller: Option<Sender<()>>,
 }
 
 impl NetworkController {
     /// Set ckb2023 start
     pub fn init_ckb2023(&self) {
-        self.network_state.ckb2023.store(true, Ordering::SeqCst);
+        self.network_state().ckb2023.store(true, Ordering::SeqCst);
     }
 
     /// Get ckb2023 flag
     pub fn load_ckb2023(&self) -> bool {
-        self.network_state.ckb2023.load(Ordering::SeqCst)
+        self.network_state().ckb2023.load(Ordering::SeqCst)
     }
 
     /// Node listen address list
     pub fn public_urls(&self, max_urls: usize) -> Vec<(String, u8)> {
-        self.network_state.public_urls(max_urls)
+        self.network_state().public_urls(max_urls)
     }
 
     /// ckb version
@@ -1200,29 +1183,33 @@ impl NetworkController {
 
     /// Node peer id's base58 format string
     pub fn node_id(&self) -> String {
-        self.network_state.node_id()
+        self.network_state().node_id()
+    }
+
+    pub fn network_state(&self) -> &Arc<NetworkState> {
+        self.inner.network_state()
     }
 
     /// p2p service control
     pub fn p2p_control(&self) -> &ServiceControl {
-        &self.p2p_control
+        &self.inner.p2p_control()
     }
 
     /// Dial remote node
     pub fn add_node(&self, address: Multiaddr) {
-        self.network_state.add_node(&self.p2p_control, address)
+        self.inner.dial_identify(address);
     }
 
     /// Disconnect session with peer id
     pub fn remove_node(&self, peer_id: &PeerId) {
         if let Some(session_id) = self
-            .network_state
+            .network_state()
             .peer_registry
             .read()
             .get_key_by_peer_id(peer_id)
         {
             if let Err(err) =
-                disconnect_with_message(&self.p2p_control, session_id, "disconnect manually")
+                disconnect_with_message(&self.p2p_control(), session_id, "disconnect manually")
             {
                 debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
             }
@@ -1233,7 +1220,7 @@ impl NetworkController {
 
     /// Get banned peer list
     pub fn get_banned_addrs(&self) -> Vec<BannedAddr> {
-        self.network_state
+        self.network_state()
             .peer_store
             .lock()
             .ban_list()
@@ -1242,12 +1229,12 @@ impl NetworkController {
 
     /// Clear banned list
     pub fn clear_banned_addrs(&self) {
-        self.network_state.peer_store.lock().clear_ban_list();
+        self.network_state().peer_store.lock().clear_ban_list();
     }
 
     /// Get address info from peer store
     pub fn addr_info(&self, addr: &Multiaddr) -> Option<AddrInfo> {
-        self.network_state
+        self.network_state()
             .peer_store
             .lock()
             .addr_manager()
@@ -1258,7 +1245,7 @@ impl NetworkController {
     /// Ban an ip
     pub fn ban(&self, address: IpNetwork, ban_until: u64, ban_reason: String) {
         self.disconnect_peers_in_ip_range(address, &ban_reason);
-        self.network_state
+        self.network_state()
             .peer_store
             .lock()
             .ban_network(address, ban_until, ban_reason)
@@ -1266,7 +1253,7 @@ impl NetworkController {
 
     /// Unban an ip
     pub fn unban(&self, address: &IpNetwork) {
-        self.network_state
+        self.network_state()
             .peer_store
             .lock()
             .mut_ban_list()
@@ -1275,7 +1262,7 @@ impl NetworkController {
 
     /// Return all connected peers' information
     pub fn connected_peers(&self) -> Vec<(PeerIndex, Peer)> {
-        self.network_state.with_peer_registry(|reg| {
+        self.network_state().with_peer_registry(|reg| {
             reg.peers()
                 .iter()
                 .map(|(peer_index, peer)| (*peer_index, peer.clone()))
@@ -1285,18 +1272,18 @@ impl NetworkController {
 
     /// Ban an peer through peer index
     pub fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
-        self.network_state
-            .ban_session(&self.p2p_control, peer_index, duration, reason);
+        self.network_state()
+            .ban_session(&self.p2p_control(), peer_index, duration, reason);
     }
 
     /// disconnect peers with matched peer_ip or peer_ip_network, eg: 192.168.0.2 or 192.168.0.0/24
     fn disconnect_peers_in_ip_range(&self, address: IpNetwork, reason: &str) {
-        self.network_state.with_peer_registry(|reg| {
+        self.network_state().with_peer_registry(|reg| {
             reg.peers().iter().for_each(|(peer_index, peer)| {
                 if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
                     if address.contains(addr.ip()) {
                         let _ = disconnect_with_message(
-                            &self.p2p_control,
+                            &self.p2p_control(),
                             *peer_index,
                             &format!("Ban peer {}, reason: {}", addr.ip(), reason),
                         );
@@ -1319,10 +1306,10 @@ impl NetworkController {
                 .map(TargetSession::Single)
                 .unwrap_or(TargetSession::All);
             let result = if quick {
-                self.p2p_control
+                self.p2p_control()
                     .quick_filter_broadcast(target, proto_id, data.clone())
             } else {
-                self.p2p_control
+                self.p2p_control()
                     .filter_broadcast(target, proto_id, data.clone())
             };
             match result {
@@ -1366,17 +1353,17 @@ impl NetworkController {
 
     /// network message processing controller, always true, if false, discard any received messages
     pub fn is_active(&self) -> bool {
-        self.network_state.is_active()
+        self.network_state().is_active()
     }
 
     /// Change active status, if set false discard any received messages
     pub fn set_active(&self, active: bool) {
-        self.network_state.active.store(active, Ordering::Relaxed);
+        self.network_state().active.store(active, Ordering::Relaxed);
     }
 
     /// Return all connected peers' protocols info
     pub fn protocols(&self) -> Vec<(ProtocolId, String, Vec<String>)> {
-        self.network_state.protocols.read().clone()
+        self.network_state().protocols.read().clone()
     }
 
     /// Try ping all connected peers

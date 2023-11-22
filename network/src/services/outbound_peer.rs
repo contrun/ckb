@@ -1,4 +1,5 @@
 use crate::{
+    network::InnerNetworkController,
     peer_store::{types::AddrInfo, PeerStore},
     NetworkState,
 };
@@ -22,22 +23,16 @@ const FEELER_CONNECTION_COUNT: usize = 10;
 /// Keep the whitelist nodes connected as much as possible
 /// Periodically detection finds that the observed addresses are all valid
 pub struct OutboundPeerService {
-    network_state: Arc<NetworkState>,
-    p2p_control: ServiceControl,
+    controller: InnerNetworkController,
     interval: Option<Interval>,
     try_connect_interval: Duration,
     try_identify_count: u8,
 }
 
 impl OutboundPeerService {
-    pub fn new(
-        network_state: Arc<NetworkState>,
-        p2p_control: ServiceControl,
-        try_connect_interval: Duration,
-    ) -> Self {
+    pub fn new(controller: InnerNetworkController, try_connect_interval: Duration) -> Self {
         OutboundPeerService {
-            network_state,
-            p2p_control,
+            controller,
             interval: None,
             try_connect_interval,
             try_identify_count: 0,
@@ -46,16 +41,19 @@ impl OutboundPeerService {
 
     fn dial_feeler(&mut self) {
         let now_ms = unix_time_as_millis();
-        let attempt_peers = self.network_state.with_peer_store_mut(|peer_store| {
-            let paddrs = peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT);
-            for paddr in paddrs.iter() {
-                // mark addr as tried
-                if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
-                    paddr.mark_tried(now_ms);
+        let attempt_peers = self
+            .controller
+            .network_state()
+            .with_peer_store_mut(|peer_store| {
+                let paddrs = peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT);
+                for paddr in paddrs.iter() {
+                    // mark addr as tried
+                    if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
+                        paddr.mark_tried(now_ms);
+                    }
                 }
-            }
-            paddrs
-        });
+                paddrs
+            });
 
         trace!(
             "feeler dial count={}, attempt_peers: {:?}",
@@ -64,12 +62,12 @@ impl OutboundPeerService {
         );
 
         for addr in attempt_peers.into_iter().map(|info| info.addr) {
-            self.network_state.dial_feeler(&self.p2p_control, addr);
+            self.controller.dial_feeler(addr);
         }
     }
 
     fn try_dial_peers(&mut self) {
-        let status = self.network_state.connection_status();
+        let status = self.controller.network_state().connection_status();
         let count = status
             .max_outbound
             .saturating_sub(status.non_whitelist_outbound) as usize;
@@ -79,7 +77,7 @@ impl OutboundPeerService {
         }
         self.try_identify_count += 1;
 
-        let target = &self.network_state.required_flags;
+        let target = &self.controller.network_state().required_flags;
 
         let f = |peer_store: &mut PeerStore, number: usize, now_ms: u64| -> Vec<AddrInfo> {
             let paddrs = peer_store.fetch_addrs_to_attempt(number, *target);
@@ -94,22 +92,24 @@ impl OutboundPeerService {
 
         let peers: Box<dyn Iterator<Item = MultiAddr>> = if self.try_identify_count > 3 {
             self.try_identify_count = 0;
-            let len = self.network_state.bootnodes.len();
+            let len = self.controller.network_state().bootnodes.len();
             if len < count {
                 let now_ms = unix_time_as_millis();
                 let attempt_peers = self
-                    .network_state
+                    .controller
+                    .network_state()
                     .with_peer_store_mut(|peer_store| f(peer_store, count - len, now_ms));
 
                 Box::new(
                     attempt_peers
                         .into_iter()
                         .map(|info| info.addr)
-                        .chain(self.network_state.bootnodes.iter().cloned()),
+                        .chain(self.controller.network_state().bootnodes.iter().cloned()),
                 )
             } else {
                 Box::new(
-                    self.network_state
+                    self.controller
+                        .network_state()
                         .bootnodes
                         .iter()
                         .choose_multiple(&mut rand::thread_rng(), count)
@@ -120,7 +120,8 @@ impl OutboundPeerService {
         } else {
             let now_ms = unix_time_as_millis();
             let attempt_peers = self
-                .network_state
+                .controller
+                .network_state()
                 .with_peer_store_mut(|peer_store| f(peer_store, count, now_ms));
 
             trace!(
@@ -133,19 +134,38 @@ impl OutboundPeerService {
         };
 
         for addr in peers {
-            self.network_state.dial_identify(&self.p2p_control, addr);
+            self.controller.dial_identify(addr);
         }
     }
 
     fn try_dial_whitelist(&self) {
-        for addr in self.network_state.config.whitelist_peers() {
-            self.network_state.dial_identify(&self.p2p_control, addr);
+        for addr in self.controller.network_state().config.whitelist_peers() {
+            self.controller.dial_identify(addr);
         }
     }
 
+    /// this method is intent to check observed addr by dial to self
     fn try_dial_observed(&self) {
-        self.network_state
-            .try_dial_observed_addrs(&self.p2p_control);
+        let mut pending_observed_addrs = self
+            .controller
+            .network_state()
+            .pending_observed_addrs
+            .write();
+        if pending_observed_addrs.is_empty() {
+            let addrs = self.controller.network_state().public_addrs.read();
+            if addrs.is_empty() {
+                return;
+            }
+            // random get addr
+            if let Some(addr) = addrs.iter().choose(&mut rand::thread_rng()) {
+                self.controller.dial_identify(addr.clone());
+            }
+        } else {
+            for addr in pending_observed_addrs.drain() {
+                trace!("try dial observed addr: {:?}", addr);
+                self.controller.dial_identify(addr);
+            }
+        }
     }
 }
 
