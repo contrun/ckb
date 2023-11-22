@@ -182,7 +182,7 @@ block_uncles_cache_size    = 30
 # The command `ckb init` also accepts options to generate the block assembler
 # directly. See `ckb init --help` for details.
 #
-#     ckb init <lock_arg>
+#     ckb init --ba-arg <lock_arg>
 #
 # # {{
 # _ => {block_assembler}
