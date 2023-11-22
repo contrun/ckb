@@ -1,16 +1,14 @@
 use crate::{
     network::InnerNetworkController,
     peer_store::{types::AddrInfo, PeerStore},
-    NetworkState,
 };
 use ckb_logger::trace;
 use ckb_systemtime::unix_time_as_millis;
 use futures::Future;
-use p2p::{multiaddr::MultiAddr, service::ServiceControl};
+use p2p::multiaddr::MultiAddr;
 use rand::prelude::IteratorRandom;
 use std::{
     pin::Pin,
-    sync::Arc,
     task::{Context, Poll},
     time::Duration,
 };

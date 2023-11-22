@@ -1028,7 +1028,7 @@ impl NetworkService {
         let receiver: CancellationToken = new_tokio_exit_rx();
         let (start_sender, start_receiver) = mpsc::channel();
         {
-            let network_state = Arc::clone(&network_state);
+            let network_state = Arc::clone(network_state);
             let p2p_control: ServiceAsyncControl = p2p_control.clone().into();
             handle.spawn_task(async move {
                 for addr in &config.listen_addresses {
@@ -1192,7 +1192,7 @@ impl NetworkController {
 
     /// p2p service control
     pub fn p2p_control(&self) -> &ServiceControl {
-        &self.inner.p2p_control()
+        self.inner.p2p_control()
     }
 
     /// Dial remote node
@@ -1209,7 +1209,7 @@ impl NetworkController {
             .get_key_by_peer_id(peer_id)
         {
             if let Err(err) =
-                disconnect_with_message(&self.p2p_control(), session_id, "disconnect manually")
+                disconnect_with_message(self.p2p_control(), session_id, "disconnect manually")
             {
                 debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
             }
@@ -1273,7 +1273,7 @@ impl NetworkController {
     /// Ban an peer through peer index
     pub fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
         self.network_state()
-            .ban_session(&self.p2p_control(), peer_index, duration, reason);
+            .ban_session(self.p2p_control(), peer_index, duration, reason);
     }
 
     /// disconnect peers with matched peer_ip or peer_ip_network, eg: 192.168.0.2 or 192.168.0.0/24
@@ -1283,7 +1283,7 @@ impl NetworkController {
                 if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
                     if address.contains(addr.ip()) {
                         let _ = disconnect_with_message(
-                            &self.p2p_control(),
+                            self.p2p_control(),
                             *peer_index,
                             &format!("Ban peer {}, reason: {}", addr.ip(), reason),
                         );
