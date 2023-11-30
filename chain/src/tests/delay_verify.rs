@@ -345,7 +345,10 @@ fn test_full_dead_transaction() {
                     .build()
             };
             chain_controller
-                .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                .blocking_process_block_with_switch(
+                    Arc::new(new_block.clone()),
+                    Switch::DISABLE_EPOCH,
+                )
                 .expect("process block ok");
             mock_store.insert_block(&new_block, &epoch);
             parent = new_block.header().to_owned();
@@ -425,7 +428,10 @@ fn test_full_dead_transaction() {
                         .build()
                 };
                 chain_controller
-                    .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                    .blocking_process_block_with_switch(
+                        Arc::new(new_block.clone()),
+                        Switch::DISABLE_EPOCH,
+                    )
                     .expect("process block ok");
                 mock_store.insert_block(&new_block, &epoch);
                 parent = new_block.header().to_owned();
@@ -494,7 +500,10 @@ fn test_full_dead_transaction() {
                         .build()
                 };
                 chain_controller
-                    .blocking_process_block_with_switch(Arc::new(new_block.clone()), Switch::DISABLE_EPOCH)
+                    .blocking_process_block_with_switch(
+                        Arc::new(new_block.clone()),
+                        Switch::DISABLE_EPOCH,
+                    )
                     .expect("process block ok");
                 mock_store.insert_block(&new_block, &epoch);
                 parent = new_block.header().to_owned();
