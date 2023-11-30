@@ -1,7 +1,6 @@
 pub mod protocols;
 
 use crate::errors::{Error, P2PError};
-use crate::network::disconnect_with_message;
 
 use crate::services::{
     dump_peer_store::DumpPeerStoreService, outbound_peer::OutboundPeerService,
@@ -29,7 +28,9 @@ use futures::{channel::mpsc::Sender, Future};
 use p2p::{
     async_trait,
     builder::ServiceBuilder,
+    bytes::Bytes,
     context::ServiceContext,
+    error::SendErrorKind,
     error::{DialerErrorKind, HandshakeErrorKind, ProtocolHandleErrorKind},
     multiaddr::Multiaddr,
     secio::error::SecioError,
@@ -685,4 +686,41 @@ impl NetworkService {
         }
         Ok(nc)
     }
+}
+
+// Send an optional message before disconnect a peer
+pub(crate) fn disconnect_with_message(
+    control: &ServiceControl,
+    peer_index: SessionId,
+    message: &str,
+) -> Result<(), SendErrorKind> {
+    if !message.is_empty() {
+        let data = Bytes::from(message.as_bytes().to_vec());
+        // Must quick send, otherwise this message will be dropped.
+        control.quick_send_message_to(
+            peer_index,
+            SupportProtocols::DisconnectMessage.protocol_id(),
+            data,
+        )?;
+    }
+    control.disconnect(peer_index)
+}
+
+pub(crate) async fn async_disconnect_with_message(
+    control: &ServiceAsyncControl,
+    peer_index: SessionId,
+    message: &str,
+) -> Result<(), SendErrorKind> {
+    if !message.is_empty() {
+        let data = Bytes::from(message.as_bytes().to_vec());
+        // Must quick send, otherwise this message will be dropped.
+        control
+            .quick_send_message_to(
+                peer_index,
+                SupportProtocols::DisconnectMessage.protocol_id(),
+                data,
+            )
+            .await?;
+    }
+    control.disconnect(peer_index).await
 }

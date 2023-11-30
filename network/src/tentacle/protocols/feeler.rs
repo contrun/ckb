@@ -1,4 +1,4 @@
-use crate::network::async_disconnect_with_message;
+use crate::network::tentacle_async_disconnect_with_message;
 use crate::{Flags, NetworkState};
 use ckb_logger::debug;
 use p2p::{
@@ -49,8 +49,12 @@ impl ServiceProtocol for Feeler {
         }
 
         debug!("peer={} FeelerProtocol.connected", session.address);
-        if let Err(err) =
-            async_disconnect_with_message(context.control(), session.id, "feeler connection").await
+        if let Err(err) = tentacle_async_disconnect_with_message(
+            context.control(),
+            session.id,
+            "feeler connection",
+        )
+        .await
         {
             debug!("Disconnect failed {:?}, error: {:?}", session.id, err);
         }

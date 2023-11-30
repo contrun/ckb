@@ -1,4 +1,4 @@
-use crate::network::async_disconnect_with_message;
+use crate::network::tentacle_async_disconnect_with_message;
 use crate::NetworkState;
 use ckb_logger::{debug, error, trace, warn};
 use ckb_types::{packed, prelude::*};
@@ -203,9 +203,12 @@ impl ServiceProtocol for PingHandler {
         match PingMessage::decode(data.as_ref()) {
             None => {
                 error!("decode message error");
-                if let Err(err) =
-                    async_disconnect_with_message(context.control(), session.id, "ping failed")
-                        .await
+                if let Err(err) = tentacle_async_disconnect_with_message(
+                    context.control(),
+                    session.id,
+                    "ping failed",
+                )
+                .await
                 {
                     debug!("Disconnect failed {:?}, error: {:?}", session.id, err);
                 }
@@ -233,7 +236,7 @@ impl ServiceProtocol for PingHandler {
                             }
                         }
                         // if nonce is incorrect or can't find ping info
-                        if let Err(err) = async_disconnect_with_message(
+                        if let Err(err) = tentacle_async_disconnect_with_message(
                             context.control(),
                             session.id,
                             "ping failed",
@@ -259,8 +262,12 @@ impl ServiceProtocol for PingHandler {
                     .filter(|(_id, ps)| ps.processing && ps.elapsed() >= timeout)
                 {
                     debug!("ping timeout, {:?}", id);
-                    if let Err(err) =
-                        async_disconnect_with_message(context.control(), *id, "ping timeout").await
+                    if let Err(err) = tentacle_async_disconnect_with_message(
+                        context.control(),
+                        *id,
+                        "ping timeout",
+                    )
+                    .await
                     {
                         debug!("Disconnect failed {:?}, error: {:?}", id, err);
                     }

@@ -34,7 +34,7 @@ pub type BoxedFutureTask = Pin<Box<dyn Future<Output = ()> + 'static + Send>>;
 
 use crate::{
     compress::{compress, decompress},
-    network::{async_disconnect_with_message, disconnect_with_message},
+    network::{tentacle_async_disconnect_with_message, tentacle_disconnect_with_message},
     Behaviour, Error, NetworkState, Peer, ProtocolVersion, SupportProtocols,
 };
 
@@ -509,7 +509,8 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        async_disconnect_with_message(&self.async_p2p_control, peer_index, message).await?;
+        tentacle_async_disconnect_with_message(&self.async_p2p_control, peer_index, message)
+            .await?;
         Ok(())
     }
     fn quick_send_message(
@@ -587,7 +588,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        disconnect_with_message(&self.p2p_control, peer_index, message)?;
+        tentacle_disconnect_with_message(&self.p2p_control, peer_index, message)?;
         Ok(())
     }
 

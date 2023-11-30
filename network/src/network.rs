@@ -1,4 +1,6 @@
 //! Global state struct and start function
+pub(crate) use super::tentacle::async_disconnect_with_message as tentacle_async_disconnect_with_message;
+pub(crate) use super::tentacle::disconnect_with_message as tentacle_disconnect_with_message;
 pub use super::tentacle::EventHandler as TentacleEventHandler;
 pub use super::tentacle::NetworkService as TentacleNetworkService;
 
@@ -23,7 +25,7 @@ use p2p::{
     error::SendErrorKind,
     multiaddr::{Multiaddr, Protocol},
     secio::{self, PeerId},
-    service::{ServiceAsyncControl, TargetProtocol, TargetSession},
+    service::{TargetProtocol, TargetSession},
     utils::{extract_peer_id, is_reachable, multiaddr_to_socketaddr},
     SessionId,
 };
@@ -153,7 +155,9 @@ impl NetworkState {
             trace!("report {:?} because {:?}", addr, behaviour);
             let report_result = self.peer_store.lock().report(&addr, behaviour);
             if report_result.is_banned() {
-                if let Err(err) = disconnect_with_message(p2p_control, session_id, "banned") {
+                if let Err(err) =
+                    tentacle_disconnect_with_message(p2p_control, session_id, "banned")
+                {
                     debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
                 }
             }
@@ -194,7 +198,7 @@ impl NetworkState {
                     reason,
                 );
                 if let Err(err) =
-                    disconnect_with_message(p2p_control, peer.session_id, message.as_str())
+                    tentacle_disconnect_with_message(p2p_control, peer.session_id, message.as_str())
                 {
                     debug!("Disconnect failed {:?}, error: {:?}", peer.session_id, err);
                 }
@@ -554,9 +558,11 @@ impl NetworkController {
             .read()
             .get_key_by_peer_id(peer_id)
         {
-            if let Err(err) =
-                disconnect_with_message(&self.p2p_control, session_id, "disconnect manually")
-            {
+            if let Err(err) = tentacle_disconnect_with_message(
+                &self.p2p_control,
+                session_id,
+                "disconnect manually",
+            ) {
                 debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
             }
         } else {
@@ -628,7 +634,7 @@ impl NetworkController {
             reg.peers().iter().for_each(|(peer_index, peer)| {
                 if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
                     if address.contains(addr.ip()) {
-                        let _ = disconnect_with_message(
+                        let _ = tentacle_disconnect_with_message(
                             &self.p2p_control,
                             *peer_index,
                             &format!("Ban peer {}, reason: {}", addr.ip(), reason),
@@ -718,41 +724,4 @@ impl NetworkController {
             let _ignore = ping_controller.try_send(());
         }
     }
-}
-
-// Send an optional message before disconnect a peer
-pub(crate) fn disconnect_with_message(
-    control: &ServiceControl,
-    peer_index: SessionId,
-    message: &str,
-) -> Result<(), SendErrorKind> {
-    if !message.is_empty() {
-        let data = Bytes::from(message.as_bytes().to_vec());
-        // Must quick send, otherwise this message will be dropped.
-        control.quick_send_message_to(
-            peer_index,
-            SupportProtocols::DisconnectMessage.protocol_id(),
-            data,
-        )?;
-    }
-    control.disconnect(peer_index)
-}
-
-pub(crate) async fn async_disconnect_with_message(
-    control: &ServiceAsyncControl,
-    peer_index: SessionId,
-    message: &str,
-) -> Result<(), SendErrorKind> {
-    if !message.is_empty() {
-        let data = Bytes::from(message.as_bytes().to_vec());
-        // Must quick send, otherwise this message will be dropped.
-        control
-            .quick_send_message_to(
-                peer_index,
-                SupportProtocols::DisconnectMessage.protocol_id(),
-                data,
-            )
-            .await?;
-    }
-    control.disconnect(peer_index).await
 }
