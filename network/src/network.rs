@@ -1042,23 +1042,20 @@ impl NetworkService {
 
         let p2p_control: ServiceControl = self.p2p_service.control().to_owned().into();
 
-        // dial whitelist_nodes
-        for addr in self.network_state.config.whitelist_peers() {
-            debug!("dial whitelist_peers {:?}", addr);
-            self.network_state.dial_identify(&p2p_control, addr);
-        }
-
         let target = &self.network_state.required_flags;
 
         // get bootnodes
         // try get addrs from peer_store, if peer_store have no enough addrs then use bootnodes
         let bootnodes = self.network_state.with_peer_store_mut(|peer_store| {
             let count = max((config.max_outbound_peers >> 1) as usize, 1);
-            let mut addrs: Vec<_> = peer_store
-                .fetch_addrs_to_attempt(count, *target)
-                .into_iter()
-                .map(|paddr| paddr.addr)
-                .collect();
+            let mut addrs = self.network_state.config.whitelist_peers();
+            addrs.extend(
+                peer_store
+                    .fetch_addrs_to_attempt(count, *target)
+                    .into_iter()
+                    .map(|paddr| paddr.addr)
+                    .collect::<Vec<_>>(),
+            );
             // Get bootnodes randomly
             let bootnodes = self
                 .network_state
@@ -1070,12 +1067,6 @@ impl NetworkService {
             addrs.extend(bootnodes);
             addrs
         });
-
-        // dial half bootnodes
-        for addr in bootnodes {
-            debug!("dial bootnode {:?}", addr);
-            self.network_state.dial_identify(&p2p_control, addr);
-        }
 
         let Self {
             mut p2p_service,
@@ -1161,12 +1152,19 @@ impl NetworkService {
             return Err(e);
         }
 
-        Ok(NetworkController {
+        let nc = NetworkController {
             version,
             network_state,
             p2p_control,
             ping_controller,
-        })
+        };
+
+        // dial half bootnodes
+        for addr in bootnodes {
+            debug!("dial bootnode {:?}", addr);
+            nc.dial_node(addr);
+        }
+        Ok(nc)
     }
 }
 
@@ -1208,6 +1206,10 @@ impl NetworkController {
     /// p2p service control
     pub fn p2p_control(&self) -> &ServiceControl {
         &self.p2p_control
+    }
+
+    pub fn dial_node(&self, addr: Multiaddr) {
+        self.network_state.dial_identify(&self.p2p_control, addr);
     }
 
     /// Dial remote node
