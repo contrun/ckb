@@ -1046,7 +1046,7 @@ impl NetworkService {
 
         // get bootnodes
         // try get addrs from peer_store, if peer_store have no enough addrs then use bootnodes
-        let bootnodes = self.network_state.with_peer_store_mut(|peer_store| {
+        let nodes_to_dial = self.network_state.with_peer_store_mut(|peer_store| {
             let count = max((config.max_outbound_peers >> 1) as usize, 1);
             let mut addrs = self.network_state.config.whitelist_peers();
             addrs.extend(
@@ -1076,14 +1076,27 @@ impl NetworkService {
             version,
         } = self;
 
-        // NOTE: for ensure background task finished
-        let (bg_signals, bg_receivers): (Vec<_>, Vec<_>) = bg_services
-            .into_iter()
-            .map(|bg_service| {
-                let (signal_sender, signal_receiver) = oneshot::channel::<()>();
-                (signal_sender, (bg_service, signal_receiver))
-            })
-            .unzip();
+        // Start background tasks, and returns a token which cancel background tasks when it is dropped.
+        let bg_signals = {
+            let (bg_signals, bg_receivers): (Vec<_>, Vec<_>) = bg_services
+                .into_iter()
+                .map(|bg_service| {
+                    let (signal_sender, signal_receiver) = oneshot::channel::<()>();
+                    (signal_sender, (bg_service, signal_receiver))
+                })
+                .unzip();
+            for (mut service, mut receiver) in bg_receivers {
+                handle.spawn_task(async move {
+                    loop {
+                        tokio::select! {
+                            _ = &mut service => {},
+                            _ = &mut receiver => break
+                        }
+                    }
+                });
+            }
+            bg_signals
+        };
 
         let receiver: CancellationToken = new_tokio_exit_rx();
         let (start_sender, start_receiver) = mpsc::channel();
@@ -1115,36 +1128,12 @@ impl NetworkService {
                 }
                 start_sender.send(Ok(())).unwrap();
                 tokio::spawn(async move { p2p_service.run().await });
-                loop {
-                    tokio::select! {
-                        _ = receiver.cancelled() => {
-                            info!("NetworkService receive exit signal, start shutdown...");
-                            let _ = p2p_control.shutdown().await;
-                            // Drop senders to stop all corresponding background task
-                            drop(bg_signals);
-
-                            info!("NetworkService shutdown now");
-                            break;
-                        },
-                        else => {
-                            let _ = p2p_control.shutdown().await;
-                            // Drop senders to stop all corresponding background task
-                            drop(bg_signals);
-
-                            break;
-                        },
-                    }
-                }
-            });
-        }
-        for (mut service, mut receiver) in bg_receivers {
-            handle.spawn_task(async move {
-                loop {
-                    tokio::select! {
-                        _ = &mut service => {},
-                        _ = &mut receiver => break
-                    }
-                }
+                let _ = receiver.cancelled().await;
+                info!("NetworkService receive exit signal, start shutdown...");
+                let _ = p2p_control.shutdown().await;
+                // Drop senders to stop all corresponding background task
+                drop(bg_signals);
+                info!("NetworkService shutdown now");
             });
         }
 
@@ -1159,9 +1148,8 @@ impl NetworkService {
             ping_controller,
         };
 
-        // dial half bootnodes
-        for addr in bootnodes {
-            debug!("dial bootnode {:?}", addr);
+        for addr in nodes_to_dial {
+            debug!("dial node {:?}", addr);
             nc.dial_node(addr);
         }
         Ok(nc)
