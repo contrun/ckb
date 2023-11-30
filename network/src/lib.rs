@@ -6,47 +6,57 @@
 //! And implemented several basic protocols: identify, discovery, ping, feeler, disconnect_message
 //!
 
+// Just to conviniently use the derive macro NetworkBehaviour.
+#[allow(unused_imports)]
+#[macro_use]
+extern crate libp2p as backend_libp2p;
+
 mod behaviour;
+mod command;
 /// compress module
 pub mod compress;
 pub mod errors;
+pub mod libp2p;
 pub mod network;
 mod network_group;
-mod peer;
+pub mod peer;
 pub mod peer_registry;
 pub mod peer_store;
-mod protocols;
 mod services;
+mod support_protocols;
+pub mod tentacle;
 
 #[cfg(test)]
 mod tests;
 
+pub use crate::peer::{Multiaddr, PeerId};
 pub use crate::{
     behaviour::Behaviour,
+    command::{Command, CommandSender},
     errors::Error,
     network::{
-        DefaultExitHandler, EventHandler, ExitHandler, NetworkController, NetworkService,
-        NetworkState,
+        DefaultExitHandler, ExitHandler, NetworkController, NetworkState, TentacleEventHandler,
+        TentacleNetworkService,
     },
-    peer::{Peer, PeerIdentifyInfo},
+    peer::{Peer, PeerIdentifyInfo, PeerIndex},
     peer_registry::PeerRegistry,
     peer_store::Score,
-    protocols::{
-        identify::Flags, support_protocols::SupportProtocols, CKBProtocol, CKBProtocolContext,
-        CKBProtocolHandler, PeerIndex,
-    },
+    support_protocols::SupportProtocols,
+    tentacle::protocols::{identify::Flags, CKBProtocol, CKBProtocolContext, CKBProtocolHandler},
 };
 pub use p2p::{
     async_trait,
     builder::ServiceBuilder,
-    bytes, multiaddr,
-    secio::{PeerId, PublicKey},
+    bytes,
+    multiaddr::{self, MultiAddr as TentacleMultiaddr},
+    secio::{PeerId as TentaclePeerId, PublicKey as TentaclePublicKey},
     service::{ServiceControl, SessionType, TargetProtocol, TargetSession},
     traits::ServiceProtocol,
     utils::{extract_peer_id, multiaddr_to_socketaddr},
-    ProtocolId, SessionId,
+    ProtocolId, SessionId, SessionId as TentacleSessionId,
 };
 pub use tokio;
+pub use serde::{self, Deserialize, Serialize};
 
 /// Protocol version used by network protocol open
 pub type ProtocolVersion = String;

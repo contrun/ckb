@@ -16,7 +16,7 @@ use p2p::{
 use rand::seq::SliceRandom;
 
 pub use self::{
-    addr::{AddrKnown, AddressManager, MisbehaveResult, Misbehavior},
+    addr::{AddrKnown, AddressManager, Misbehavior},
     protocol::{DiscoveryMessage, Node, Nodes},
     state::SessionState,
 };
@@ -24,7 +24,7 @@ use self::{
     protocol::{decode, encode},
     state::RemoteAddress,
 };
-use crate::{Flags, NetworkState, ProtocolId};
+use crate::{peer::PeerType, Flags, NetworkState, ProtocolId};
 
 mod addr;
 pub(crate) mod protocol;
@@ -95,10 +95,6 @@ impl<M: AddressManager + Send + Sync> ServiceProtocol for DiscoveryProtocol<M> {
         let session = context.session;
         trace!("[received message]: length={}", data.len());
 
-        let mgr = &mut self.addr_mgr;
-        let mut check =
-            |behavior: Misbehavior| -> bool { mgr.misbehave(session, &behavior).is_disconnect() };
-
         match decode(&data) {
             Some(item) => {
                 match item {
@@ -109,10 +105,13 @@ impl<M: AddressManager + Send + Sync> ServiceProtocol for DiscoveryProtocol<M> {
                         required_flags,
                     } => {
                         if let Some(state) = self.sessions.get_mut(&session.id) {
-                            if state.received_get_nodes && check(Misbehavior::DuplicateGetNodes) {
-                                if context.disconnect(session.id).await.is_err() {
-                                    debug!("disconnect {:?} send fail", session.id)
-                                }
+                            if state.received_get_nodes {
+                                disconnect_due_to_misbehavior(
+                                    context,
+                                    session,
+                                    &Misbehavior::DuplicateGetNodes,
+                                )
+                                .await;
                                 return;
                             }
 
@@ -171,22 +170,20 @@ impl<M: AddressManager + Send + Sync> ServiceProtocol for DiscoveryProtocol<M> {
                     }
                     DiscoveryMessage::Nodes(nodes) => {
                         if let Some(misbehavior) = verify_nodes_message(&nodes) {
-                            if check(misbehavior) {
-                                if context.disconnect(session.id).await.is_err() {
-                                    debug!("disconnect {:?} send fail", session.id)
-                                }
-                                return;
-                            }
+                            disconnect_due_to_misbehavior(context, session, &misbehavior).await;
+                            return;
                         }
 
                         if let Some(state) = self.sessions.get_mut(&session.id) {
                             if !nodes.announce && state.received_nodes {
                                 warn!("already received Nodes(announce=false) message");
-                                if check(Misbehavior::DuplicateFirstNodes)
-                                    && context.disconnect(session.id).await.is_err()
-                                {
-                                    debug!("disconnect {:?} send fail", session.id)
-                                }
+                                disconnect_due_to_misbehavior(
+                                    context,
+                                    session,
+                                    &Misbehavior::DuplicateFirstNodes,
+                                )
+                                .await;
+                                return;
                             } else {
                                 let addrs = nodes
                                     .items
@@ -211,14 +208,8 @@ impl<M: AddressManager + Send + Sync> ServiceProtocol for DiscoveryProtocol<M> {
                 }
             }
             None => {
-                if self
-                    .addr_mgr
-                    .misbehave(session, &Misbehavior::InvalidData)
-                    .is_disconnect()
-                    && context.disconnect(session.id).await.is_err()
-                {
-                    debug!("disconnect {:?} send fail", session.id)
-                }
+                disconnect_due_to_misbehavior(context, session, &Misbehavior::InvalidData).await;
+                return;
             }
         }
     }
@@ -346,7 +337,7 @@ impl AddressManager for DiscoveryAddressManager {
         for (addr, flags) in addrs.into_iter().filter(|addr| self.is_valid_addr(&addr.0)) {
             trace!("Add discovered address:{:?}", addr);
             self.network_state.with_peer_store_mut(|peer_store| {
-                if let Err(err) = peer_store.add_addr(addr.clone(), flags) {
+                if let Err(err) = peer_store.add_addr((&addr).into(), flags) {
                     debug!(
                         "Failed to add discovered address to peer_store {:?} {:?}",
                         err, addr
@@ -356,29 +347,20 @@ impl AddressManager for DiscoveryAddressManager {
         }
     }
 
-    fn misbehave(&mut self, session: &SessionContext, behavior: &Misbehavior) -> MisbehaveResult {
-        error!(
-            "DiscoveryProtocol detects abnormal behavior, session: {:?}, behavior: {:?}",
-            session, behavior
-        );
-
-        // FIXME:
-        MisbehaveResult::Disconnect
-    }
-
     fn get_random(&mut self, n: usize, flags: Flags) -> Vec<(Multiaddr, Flags)> {
-        let fetch_random_addrs = self
-            .network_state
-            .with_peer_store_mut(|peer_store| peer_store.fetch_random_addrs(n, flags));
+        let fetch_random_addrs = self.network_state.with_peer_store_mut(|peer_store| {
+            peer_store.fetch_random_addrs(n, flags, PeerType::Tentacle)
+        });
         let addrs = fetch_random_addrs
             .into_iter()
             .filter_map(|paddr| {
-                if !self.is_valid_addr(&paddr.addr) {
+                if !self.is_valid_addr(&(&paddr.addr).into()) {
                     return None;
                 }
                 let f = Flags::from_bits_truncate(paddr.flags);
                 Some((paddr.addr, f))
             })
+            .map(|(addr, flags)| (addr.into(), flags))
             .collect();
         trace!("discovery send random addrs: {:?}", addrs);
         addrs
@@ -393,5 +375,19 @@ impl AddressManager for DiscoveryAddressManager {
             reg.get_peer(id)
                 .and_then(|peer| peer.identify_info.as_ref().map(|a| a.flags))
         })
+    }
+}
+
+async fn disconnect_due_to_misbehavior(
+    context: ProtocolContextMutRef<'_>,
+    session: &SessionContext,
+    behavior: &Misbehavior,
+) {
+    error!(
+        "DiscoveryProtocol detects abnormal behavior, session: {:?}, behavior: {:?}",
+        session, behavior
+    );
+    if context.disconnect(session.id).await.is_err() {
+        debug!("disconnect {:?} send fail", session.id)
     }
 }

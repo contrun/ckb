@@ -2,12 +2,11 @@ use ckb_channel::{bounded, Receiver, Select, Sender};
 use ckb_network::async_trait;
 use ckb_network::{
     bytes::Bytes, Behaviour, CKBProtocolContext, CKBProtocolHandler, Peer, PeerIndex, ProtocolId,
-    TargetSession,
+    TargetSession, TentacleSessionId,
 };
 use ckb_util::RwLock;
-use futures::{executor::block_on, future::Future};
+use futures::executor::block_on;
 use std::collections::{HashMap, HashSet};
-use std::pin::Pin;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -85,14 +84,14 @@ impl TestNode {
         let (local_sender, local_receiver) = bounded(DEFAULT_CHANNEL);
         let local_index = self.peers.len();
         self.peers.insert(local_index, local_index.into());
-        let local_ch_index = Index::Msg(protocol, local_index.into());
+        let local_ch_index = Index::Msg(protocol, TentacleSessionId::from(local_index).into());
         self.senders.insert(local_ch_index.clone(), local_sender);
 
         let (remote_sender, remote_receiver) = bounded(DEFAULT_CHANNEL);
         let remote_index = remote.peers.len();
         remote.peers.insert(remote_index, remote_index.into());
 
-        let remote_ch_index = Index::Msg(protocol, local_index.into());
+        let remote_ch_index = Index::Msg(protocol, TentacleSessionId::from(local_index).into());
         remote
             .senders
             .insert(remote_ch_index.clone(), remote_sender);
@@ -248,13 +247,6 @@ impl CKBProtocolContext for TestNetworkContext {
     ) -> Result<(), ckb_network::Error> {
         self.quick_filter_broadcast(target, data)
     }
-    async fn async_future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        Ok(())
-    }
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
@@ -284,15 +276,6 @@ impl CKBProtocolContext for TestNetworkContext {
     ) -> Result<(), ckb_network::Error> {
         self.disconnect(peer_index, message)
     }
-    fn future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        //        task.await.expect("resolve future task error");
-        Ok(())
-    }
-
     fn quick_send_message(
         &self,
         proto_id: ProtocolId,
@@ -363,7 +346,7 @@ impl CKBProtocolContext for TestNetworkContext {
             }
             TargetSession::Multi(iter) => {
                 for peer in iter {
-                    self.send_message_to(peer, data.clone()).unwrap();
+                    self.send_message_to(TentacleSessionId::from(peer), data.clone()).unwrap();
                 }
             }
             TargetSession::All => {

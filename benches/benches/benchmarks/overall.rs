@@ -5,7 +5,7 @@ use ckb_chain::chain::{ChainController, ChainService};
 use ckb_chain_spec::consensus::{ConsensusBuilder, ProposalWindow};
 use ckb_dao_utils::genesis_dao_data;
 use ckb_jsonrpc_types::JsonBytes;
-use ckb_network::{Flags, NetworkController, NetworkService, NetworkState};
+use ckb_network::{Flags, NetworkController, NetworkState, TentacleNetworkService};
 use ckb_shared::{Shared, SharedBuilder};
 use ckb_store::ChainStore;
 use ckb_types::{
@@ -67,7 +67,7 @@ fn dummy_network(shared: &Shared) -> NetworkController {
 
     let network_state =
         Arc::new(NetworkState::from_config(config).expect("Init network state failed"));
-    NetworkService::new(
+    TentacleNetworkService::new(
         network_state,
         vec![],
         vec![],

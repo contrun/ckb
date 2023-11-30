@@ -1,8 +1,8 @@
 use crate::utils::send_message_to;
 use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
 use ckb_logger::{debug, info, warn};
-use ckb_network::async_trait;
-use ckb_network::{bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, PeerIndex};
+use ckb_network::{async_trait, TentacleSessionId};
+use ckb_network::{bytes::Bytes, CKBProtocolContext, CKBProtocolHandler};
 use ckb_types::{packed, prelude::*};
 use ckb_util::RwLock;
 use std::collections::VecDeque;
@@ -112,9 +112,10 @@ impl CKBProtocolHandler for NetTimeProtocol {
     async fn connected(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         _version: &str,
     ) {
+        let peer_index = session_id.into();
         // send local time to inbound peers
         if let Some(true) = nc.get_peer(peer_index).map(|peer| peer.is_inbound()) {
             let now = ckb_systemtime::unix_time_as_millis();
@@ -126,9 +127,10 @@ impl CKBProtocolHandler for NetTimeProtocol {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        peer_index: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = peer_index.into();
         if let Some(true) = nc.get_peer(peer_index).map(|peer| peer.is_inbound()) {
             info!(
                 "Peer {} is not outbound but sends us time message",

@@ -5,7 +5,7 @@ use ckb_dao::DaoCalculator;
 use ckb_error::InternalErrorKind;
 use ckb_network::{
     async_trait, bytes::Bytes, Behaviour, CKBProtocolContext, Peer, PeerId, PeerIndex, ProtocolId,
-    SessionType, TargetSession,
+    SessionType, TargetSession, TentacleSessionId,
 };
 use ckb_reward_calculator::RewardCalculator;
 use ckb_shared::{Shared, SharedBuilder, Snapshot};
@@ -25,11 +25,9 @@ use ckb_types::{
 };
 use ckb_util::Mutex;
 use ckb_verification_traits::Switch;
-use futures::future::Future;
 use std::{
     collections::{HashMap, HashSet},
     ops::Deref,
-    pin::Pin,
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
@@ -405,7 +403,7 @@ struct DummyNetworkContext {
 
 fn mock_peer_info() -> Peer {
     Peer::new(
-        0.into(),
+        TentacleSessionId::from(0),
         SessionType::Outbound,
         format!("/ip4/127.0.0.1/tcp/42/p2p/{}", PeerId::random().to_base58())
             .parse()
@@ -430,13 +428,6 @@ impl CKBProtocolContext for DummyNetworkContext {
 
     async fn remove_notify(&self, _token: u64) -> Result<(), ckb_network::Error> {
         unimplemented!()
-    }
-    async fn async_future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        Ok(())
     }
 
     async fn async_quick_send_message(
@@ -489,15 +480,6 @@ impl CKBProtocolContext for DummyNetworkContext {
         _msg: &str,
     ) -> Result<(), ckb_network::Error> {
         self.disconnected.lock().insert(peer_index);
-        Ok(())
-    }
-
-    fn future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        //            task.await.expect("resolve future task error");
         Ok(())
     }
 
@@ -568,7 +550,7 @@ impl CKBProtocolContext for DummyNetworkContext {
 fn mock_network_context(peer_num: usize) -> DummyNetworkContext {
     let mut peers = HashMap::default();
     for peer in 0..peer_num {
-        peers.insert(peer.into(), mock_peer_info());
+        peers.insert(TentacleSessionId::from(peer).into(), mock_peer_info());
     }
     DummyNetworkContext {
         peers,
@@ -622,8 +604,8 @@ fn test_sync_process() {
         .build();
 
     let mock_nc = mock_network_context(4);
-    let peer1: PeerIndex = 1.into();
-    let peer2: PeerIndex = 2.into();
+    let peer1: PeerIndex = TentacleSessionId::from(1).into();
+    let peer2: PeerIndex = TentacleSessionId::from(2).into();
     synchronizer1.on_connected(&mock_nc, peer1);
     synchronizer1.on_connected(&mock_nc, peer2);
     assert_eq!(
@@ -732,16 +714,27 @@ fn test_header_sync_timeout() {
         state_3.peer_flags.is_outbound = true;
         state_3.headers_sync_controller = Some(not_timeout);
 
-        peers.state.insert(0.into(), state_0);
-        peers.state.insert(1.into(), state_1);
-        peers.state.insert(2.into(), state_2);
-        peers.state.insert(3.into(), state_3);
+        peers
+            .state
+            .insert(TentacleSessionId::from(0).into(), state_0);
+        peers
+            .state
+            .insert(TentacleSessionId::from(1).into(), state_1);
+        peers
+            .state
+            .insert(TentacleSessionId::from(2).into(), state_2);
+        peers
+            .state
+            .insert(TentacleSessionId::from(3).into(), state_3);
     }
     synchronizer.eviction(&network_context);
     let disconnected = network_context.disconnected.lock();
     assert_eq!(
         disconnected.deref(),
-        &vec![0, 1, 2].into_iter().map(Into::into).collect()
+        &vec![0, 1, 2]
+            .into_iter()
+            .map(|x| TentacleSessionId::from(x).into())
+            .collect()
     )
 }
 
@@ -765,7 +758,7 @@ fn test_chain_sync_timeout() {
     let peers = synchronizer.peers();
     //6 peers do not trigger header sync timeout
     let not_timeout = HeadersSyncController::new(MAX_TIP_AGE * 2, 0, MAX_TIP_AGE * 2, 0, false);
-    let sync_protected_peer = 0.into();
+    let sync_protected_peer = TentacleSessionId::from(0).into();
     {
         let mut state_0 = PeerState::default();
         state_0.peer_flags.is_protect = true;
@@ -799,18 +792,32 @@ fn test_chain_sync_timeout() {
         state_6.peer_flags.is_outbound = true;
         state_6.headers_sync_controller = Some(not_timeout);
 
-        peers.state.insert(0.into(), state_0);
-        peers.state.insert(1.into(), state_1);
-        peers.state.insert(2.into(), state_2);
-        peers.state.insert(3.into(), state_3);
-        peers.state.insert(4.into(), state_4);
-        peers.state.insert(5.into(), state_5);
-        peers.state.insert(6.into(), state_6);
+        peers
+            .state
+            .insert(TentacleSessionId::from(0).into(), state_0);
+        peers
+            .state
+            .insert(TentacleSessionId::from(1).into(), state_1);
+        peers
+            .state
+            .insert(TentacleSessionId::from(2).into(), state_2);
+        peers
+            .state
+            .insert(TentacleSessionId::from(3).into(), state_3);
+        peers
+            .state
+            .insert(TentacleSessionId::from(4).into(), state_4);
+        peers
+            .state
+            .insert(TentacleSessionId::from(5).into(), state_5);
+        peers
+            .state
+            .insert(TentacleSessionId::from(6).into(), state_6);
     }
-    peers.may_set_best_known_header(0.into(), mock_header_index(1));
-    peers.may_set_best_known_header(2.into(), mock_header_index(3));
-    peers.may_set_best_known_header(3.into(), mock_header_index(1));
-    peers.may_set_best_known_header(5.into(), mock_header_index(3));
+    peers.may_set_best_known_header(TentacleSessionId::from(0).into(), mock_header_index(1));
+    peers.may_set_best_known_header(TentacleSessionId::from(2).into(), mock_header_index(3));
+    peers.may_set_best_known_header(TentacleSessionId::from(3).into(), mock_header_index(1));
+    peers.may_set_best_known_header(TentacleSessionId::from(5).into(), mock_header_index(3));
     {
         // Protected peer 0 start sync
         peers
@@ -846,7 +853,7 @@ fn test_chain_sync_timeout() {
         //protect peer is protected from disconnection
         assert!(peers
             .state
-            .get(&2.into())
+            .get(&TentacleSessionId::from(2).into())
             .unwrap()
             .chain_sync
             .work_header
@@ -862,26 +869,36 @@ fn test_chain_sync_timeout() {
             (header, total_difficulty)
         };
         assert_eq!(
-            peers.state.get(&3.into()).unwrap().chain_sync.work_header,
+            peers
+                .state
+                .get(&TentacleSessionId::from(3).into())
+                .unwrap()
+                .chain_sync
+                .work_header,
             Some(tip.clone())
         );
         assert_eq!(
             peers
                 .state
-                .get(&3.into())
+                .get(&TentacleSessionId::from(3).into())
                 .unwrap()
                 .chain_sync
                 .total_difficulty,
             Some(total_difficulty.clone())
         );
         assert_eq!(
-            peers.state.get(&4.into()).unwrap().chain_sync.work_header,
+            peers
+                .state
+                .get(&TentacleSessionId::from(4).into())
+                .unwrap()
+                .chain_sync
+                .work_header,
             Some(tip)
         );
         assert_eq!(
             peers
                 .state
-                .get(&4.into())
+                .get(&TentacleSessionId::from(4).into())
                 .unwrap()
                 .chain_sync
                 .total_difficulty,
@@ -891,7 +908,7 @@ fn test_chain_sync_timeout() {
             assert_eq!(
                 peers
                     .state
-                    .get(&(*proto_id).into())
+                    .get(&TentacleSessionId::from(*proto_id).into())
                     .unwrap()
                     .chain_sync
                     .timeout,
@@ -907,11 +924,21 @@ fn test_chain_sync_timeout() {
         // message to give the peer a chance to update us.
         assert!({ network_context.disconnected.lock().is_empty() });
         assert_eq!(
-            peers.state.get(&3.into()).unwrap().chain_sync.timeout,
+            peers
+                .state
+                .get(&TentacleSessionId::from(3).into())
+                .unwrap()
+                .chain_sync
+                .timeout,
             unix_time_as_millis() + EVICTION_HEADERS_RESPONSE_TIME
         );
         assert_eq!(
-            peers.state.get(&4.into()).unwrap().chain_sync.timeout,
+            peers
+                .state
+                .get(&TentacleSessionId::from(4).into())
+                .unwrap()
+                .chain_sync
+                .timeout,
             unix_time_as_millis() + EVICTION_HEADERS_RESPONSE_TIME
         );
     }
@@ -937,7 +964,10 @@ fn test_chain_sync_timeout() {
         let disconnected = network_context.disconnected.lock();
         assert_eq!(
             disconnected.deref(),
-            &vec![3, 4].into_iter().map(Into::into).collect()
+            &vec![3, 4]
+                .into_iter()
+                .map(|x| TentacleSessionId::from(x).into())
+                .collect()
         )
     }
 }
@@ -962,7 +992,7 @@ fn test_n_sync_started() {
     let peers = synchronizer.peers();
     //6 peers do not trigger header sync timeout
     let not_timeout = HeadersSyncController::new(MAX_TIP_AGE * 2, 0, MAX_TIP_AGE * 2, 0, false);
-    let sync_protected_peer = 0.into();
+    let sync_protected_peer = TentacleSessionId::from(0).into();
 
     {
         let mut state_0 = PeerState::default();
@@ -970,7 +1000,7 @@ fn test_n_sync_started() {
         state_0.peer_flags.is_outbound = true;
         state_0.headers_sync_controller = Some(not_timeout);
 
-        peers.state.insert(0.into(), state_0);
+        peers.state.insert(TentacleSessionId::from(0).into(), state_0);
     }
 
     {
@@ -1088,7 +1118,7 @@ fn test_fix_last_common_header() {
     }
     {
         let nc = mock_network_context(1);
-        let peer: PeerIndex = 0.into();
+        let peer: PeerIndex = TentacleSessionId::from(0).into();
         let fork_headers = (1..=fork_tip_number)
             .map(|number| graph.get(&f_(number)).cloned().unwrap())
             .map(|block| block.header().data())
@@ -1119,7 +1149,7 @@ fn test_fix_last_common_header() {
 
     let nc = mock_network_context(cases.len());
     for (case, (last_common, best_known, fix_last_common)) in cases.into_iter().enumerate() {
-        let peer: PeerIndex = case.into();
+        let peer: PeerIndex = TentacleSessionId::from(case).into();
         synchronizer.on_connected(&nc, peer);
 
         let last_common_header = last_common.map(|key| graph.get(key).cloned().unwrap().header());
@@ -1174,7 +1204,7 @@ fn get_blocks_process() {
         .build();
 
     let nc = mock_network_context(1);
-    let peer: PeerIndex = 1.into();
+    let peer: PeerIndex = TentacleSessionId::from(1).into();
     let process = GetBlocksProcess::new(message_with_genesis.as_reader(), &synchronizer, peer, &nc);
     assert_eq!(
         process.execute(),
@@ -1187,7 +1217,7 @@ fn get_blocks_process() {
         .build();
 
     let nc = mock_network_context(1);
-    let peer: PeerIndex = 1.into();
+    let peer: PeerIndex = TentacleSessionId::from(1).into();
     let process = GetBlocksProcess::new(message_with_dup.as_reader(), &synchronizer, peer, &nc);
     assert_eq!(
         process.execute(),

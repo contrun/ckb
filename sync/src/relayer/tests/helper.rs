@@ -4,8 +4,8 @@ use ckb_chain::chain::ChainService;
 use ckb_chain_spec::consensus::{build_genesis_epoch_ext, ConsensusBuilder};
 use ckb_network::{
     async_trait, bytes::Bytes as P2pBytes, Behaviour, CKBProtocolContext, Error, Flags,
-    NetworkController, NetworkService, NetworkState, Peer, PeerIndex, ProtocolId, SupportProtocols,
-    TargetSession,
+    NetworkController, NetworkState, Peer, PeerIndex, ProtocolId, SupportProtocols, TargetSession,
+    TentacleNetworkService,
 };
 use ckb_shared::{Shared, SharedBuilder};
 use ckb_store::ChainStore;
@@ -26,7 +26,7 @@ use ckb_types::{
     U256,
 };
 use ckb_verification_traits::Switch;
-use std::{cell::RefCell, future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 pub(crate) fn new_index_transaction(index: usize) -> IndexTransaction {
     let transaction = TransactionBuilder::default()
@@ -112,7 +112,7 @@ pub(crate) fn dummy_network(shared: &Shared) -> NetworkController {
 
     let network_state =
         Arc::new(NetworkState::from_config(config).expect("Init network state failed"));
-    NetworkService::new(
+    TentacleNetworkService::new(
         network_state,
         vec![],
         vec![],
@@ -269,13 +269,6 @@ impl CKBProtocolContext for MockProtocolContext {
     ) -> Result<(), Error> {
         unimplemented!();
     }
-    async fn async_future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
@@ -319,13 +312,6 @@ impl CKBProtocolContext for MockProtocolContext {
     }
     fn quick_filter_broadcast(&self, _target: TargetSession, _data: P2pBytes) -> Result<(), Error> {
         unimplemented!();
-    }
-    fn future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), Error> {
-        Ok(())
     }
     fn send_message(
         &self,

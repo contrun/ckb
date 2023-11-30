@@ -2,7 +2,7 @@ use crate::block_status::BlockStatus;
 use crate::relayer::compact_block_process::CompactBlockProcess;
 use crate::relayer::tests::helper::{build_chain, new_header_builder, MockProtocolContext};
 use crate::{Status, StatusCode};
-use ckb_network::{PeerIndex, SupportProtocols};
+use ckb_network::{PeerIndex, SupportProtocols, TentacleSessionId};
 use ckb_store::ChainStore;
 use ckb_systemtime::unix_time_as_millis;
 use ckb_tx_pool::{PlugTarget, TxEntry};
@@ -38,7 +38,7 @@ fn test_in_block_status_map() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -121,7 +121,7 @@ fn test_unknow_parent() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -174,7 +174,7 @@ fn test_accept_not_a_better_block() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -209,7 +209,7 @@ fn test_header_invalid() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -269,7 +269,7 @@ fn test_send_missing_indexes() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -350,7 +350,7 @@ fn test_accept_block() {
             mock_block_1.header().hash(),
             (
                 mock_compact_block_1,
-                HashMap::from_iter(vec![(1.into(), (vec![1], vec![0]))]),
+                HashMap::from_iter(vec![(TentacleSessionId::from(1).into(), (vec![1], vec![0]))]),
                 ckb_systemtime::unix_time_as_millis(),
             ),
         );
@@ -359,7 +359,7 @@ fn test_accept_block() {
             mock_block_2.header().hash(),
             (
                 mock_compact_block_2,
-                HashMap::from_iter(vec![(1.into(), (vec![1], vec![0]))]),
+                HashMap::from_iter(vec![(TentacleSessionId::from(1).into(), (vec![1], vec![0]))]),
                 ckb_systemtime::unix_time_as_millis(),
             ),
         );
@@ -381,7 +381,7 @@ fn test_accept_block() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -421,7 +421,7 @@ fn test_ignore_a_too_old_block() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -457,7 +457,7 @@ fn test_invalid_transaction_root() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),
@@ -532,7 +532,7 @@ fn test_collision() {
 
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let compact_block_process = CompactBlockProcess::new(
         compact_block.as_reader(),

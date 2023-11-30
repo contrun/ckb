@@ -1,9 +1,9 @@
 use crate::synchronizer::Synchronizer;
-use crate::utils::{send_message, send_message_to};
+use crate::utils::{send_message_with_command_sender, send_protocol_message_with_command_sender};
 use crate::{attempt, Status, StatusCode};
 use ckb_constant::sync::MAX_LOCATOR_SIZE;
 use ckb_logger::{debug, info};
-use ckb_network::{CKBProtocolContext, PeerIndex, SupportProtocols};
+use ckb_network::{CommandSender, PeerIndex, SupportProtocols};
 use ckb_types::{
     core,
     packed::{self, Byte32},
@@ -14,7 +14,7 @@ pub struct GetHeadersProcess<'a> {
     message: packed::GetHeadersReader<'a>,
     synchronizer: &'a Synchronizer,
     peer: PeerIndex,
-    nc: &'a dyn CKBProtocolContext,
+    command_sender: CommandSender,
 }
 
 impl<'a> GetHeadersProcess<'a> {
@@ -22,11 +22,11 @@ impl<'a> GetHeadersProcess<'a> {
         message: packed::GetHeadersReader<'a>,
         synchronizer: &'a Synchronizer,
         peer: PeerIndex,
-        nc: &'a dyn CKBProtocolContext,
+        command_sender: CommandSender,
     ) -> Self {
         GetHeadersProcess {
             message,
-            nc,
+            command_sender,
             synchronizer,
             peer,
         }
@@ -85,7 +85,11 @@ impl<'a> GetHeadersProcess<'a> {
                 .build();
             let message = packed::SyncMessage::new_builder().set(content).build();
 
-            attempt!(send_message_to(self.nc, self.peer, &message));
+            attempt!(send_protocol_message_with_command_sender(
+                &self.command_sender,
+                self.peer,
+                &message
+            ));
         } else {
             return StatusCode::GetHeadersMissCommonAncestors
                 .with_context(format!("{block_locator_hashes:#x?}"));
@@ -96,9 +100,9 @@ impl<'a> GetHeadersProcess<'a> {
     fn send_in_ibd(&self) {
         let content = packed::InIBD::new_builder().build();
         let message = packed::SyncMessage::new_builder().set(content).build();
-        let _ignore = send_message(
-            SupportProtocols::Sync.protocol_id(),
-            self.nc,
+        let _ignore = send_message_with_command_sender(
+            &self.command_sender,
+            SupportProtocols::Sync,
             self.peer,
             &message,
         );

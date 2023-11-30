@@ -1,7 +1,7 @@
 use crate::relayer::get_transactions_process::GetTransactionsProcess;
 use crate::relayer::tests::helper::{build_chain, new_transaction, MockProtocolContext};
 use crate::StatusCode;
-use ckb_network::{PeerIndex, SupportProtocols};
+use ckb_network::{PeerIndex, SupportProtocols, TentacleSessionId};
 use ckb_types::packed;
 use ckb_types::prelude::*;
 use std::sync::Arc;
@@ -17,7 +17,7 @@ fn test_duplicate() {
         .build();
     let mock_protocol_context = MockProtocolContext::new(SupportProtocols::RelayV2);
     let nc = Arc::new(mock_protocol_context);
-    let peer_index: PeerIndex = 1.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(1).into();
     let process = GetTransactionsProcess::new(content.as_reader(), &relayer, nc, peer_index);
 
     assert_eq!(

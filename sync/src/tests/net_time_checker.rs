@@ -2,8 +2,8 @@ use crate::net_time_checker::{NetTimeChecker, NetTimeProtocol, TOLERANT_OFFSET};
 use ckb_app_config::NetworkConfig;
 use ckb_network::{
     multiaddr::{Multiaddr, Protocol},
-    CKBProtocol, EventHandler, NetworkState, ServiceBuilder, ServiceControl, SessionId,
-    SupportProtocols, TargetProtocol,
+    CKBProtocol, NetworkState, ServiceBuilder, ServiceControl, SessionId, SupportProtocols,
+    TargetProtocol, TentacleEventHandler,
 };
 use std::{
     borrow::Cow,
@@ -63,7 +63,7 @@ impl Node {
 
     fn connected_sessions(&self) -> Vec<SessionId> {
         self.network_state
-            .with_peer_registry(|reg| reg.peers().keys().cloned().collect())
+            .with_peer_registry(|reg| reg.peers().keys().map(Into::into).cloned().collect())
     }
 }
 
@@ -102,7 +102,7 @@ fn net_service_start() -> Node {
         .key_pair(network_state.local_private_key().clone())
         .upnp(config.upnp)
         .forever(true)
-        .build(EventHandler::new(Arc::clone(&network_state)));
+        .build(TentacleEventHandler::new(Arc::clone(&network_state)));
 
     let peer_id = network_state.local_peer_id().clone();
 

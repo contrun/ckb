@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use ckb_merkle_mountain_range::leaf_index_to_pos;
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CKBProtocolContext, TentacleSessionId};
 use ckb_store::ChainStore;
 use ckb_types::{packed, prelude::*, utilities::CBMT};
 
@@ -10,7 +10,7 @@ use crate::{constant, LightClientProtocol, Status, StatusCode};
 pub(crate) struct GetTransactionsProofProcess<'a> {
     message: packed::GetTransactionsProofReader<'a>,
     protocol: &'a LightClientProtocol,
-    peer: PeerIndex,
+    peer: TentacleSessionId,
     nc: &'a dyn CKBProtocolContext,
 }
 
@@ -18,7 +18,7 @@ impl<'a> GetTransactionsProofProcess<'a> {
     pub(crate) fn new(
         message: packed::GetTransactionsProofReader<'a>,
         protocol: &'a LightClientProtocol,
-        peer: PeerIndex,
+        peer: TentacleSessionId,
         nc: &'a dyn CKBProtocolContext,
     ) -> Self {
         Self {

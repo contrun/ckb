@@ -9,7 +9,7 @@ use ckb_chain::chain::ChainService;
 use ckb_chain_spec::consensus::{Consensus, ConsensusBuilder};
 use ckb_chain_spec::versionbits::{ActiveMode, Deployment, DeploymentPos};
 use ckb_dao_utils::genesis_dao_data;
-use ckb_network::{Flags, NetworkService, NetworkState};
+use ckb_network::{Flags, NetworkState, TentacleNetworkService};
 use ckb_network_alert::alert_relayer::AlertRelayer;
 use ckb_notify::NotifyService;
 use ckb_shared::SharedBuilder;
@@ -145,7 +145,7 @@ fn setup_rpc_test_suite(height: u64) -> RpcTestSuite {
         };
         let network_state =
             Arc::new(NetworkState::from_config(network_config).expect("Init network state failed"));
-        NetworkService::new(
+        TentacleNetworkService::new(
             Arc::clone(&network_state),
             Vec::new(),
             Vec::new(),
@@ -262,7 +262,7 @@ fn setup_rpc_test_suite(height: u64) -> RpcTestSuite {
             chain_controller.clone(),
         )
         .enable_debug()
-        .enable_alert(alert_verifier, alert_notifier, network_controller);
+        .enable_alert(network_controller);
     let io_handler = builder.build();
 
     let rpc_server = RpcServer::new(

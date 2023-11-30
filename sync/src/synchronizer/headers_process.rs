@@ -5,7 +5,7 @@ use crate::{Status, StatusCode};
 use ckb_constant::sync::MAX_HEADERS_LEN;
 use ckb_error::Error;
 use ckb_logger::{debug, log_enabled, warn, Level};
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{Command, CommandSender, PeerIndex};
 use ckb_traits::HeaderFieldsProvider;
 use ckb_types::{core, packed, prelude::*};
 use ckb_verification::{HeaderError, HeaderVerifier};
@@ -15,7 +15,7 @@ pub struct HeadersProcess<'a> {
     message: packed::SendHeadersReader<'a>,
     synchronizer: &'a Synchronizer,
     peer: PeerIndex,
-    nc: &'a dyn CKBProtocolContext,
+    command_sender: CommandSender,
     active_chain: ActiveChain,
 }
 
@@ -24,12 +24,12 @@ impl<'a> HeadersProcess<'a> {
         message: packed::SendHeadersReader<'a>,
         synchronizer: &'a Synchronizer,
         peer: PeerIndex,
-        nc: &'a dyn CKBProtocolContext,
+        command_sender: CommandSender,
     ) -> Self {
         let active_chain = synchronizer.shared.active_chain();
         HeadersProcess {
             message,
-            nc,
+            command_sender,
             synchronizer,
             peer,
             active_chain,
@@ -182,7 +182,7 @@ impl<'a> HeadersProcess<'a> {
         if headers.len() == MAX_HEADERS_LEN {
             let start = headers.last().expect("empty checked").into();
             self.active_chain
-                .send_getheaders_to_peer(self.nc, self.peer, start);
+                .send_getheaders_to_peer(&self.command_sender, self.peer, start);
         } else if let Some(mut state) = self.synchronizer.peers().state.get_mut(&self.peer) {
             self.synchronizer
                 .shared()
@@ -202,12 +202,10 @@ impl<'a> HeadersProcess<'a> {
             && (!peer_flags.is_protect && !peer_flags.is_whitelist && peer_flags.is_outbound)
         {
             debug!("Disconnect peer({}) is unprotected outbound", self.peer);
-            if let Err(err) = self
-                .nc
-                .disconnect(self.peer, "useless outbound peer in IBD")
-            {
-                return StatusCode::Network.with_context(format!("Disconnect error: {err:?}"));
-            }
+            self.command_sender.send(Command::Disconnect {
+                peer: self.peer,
+                message: "useless outbound peer in IBD".to_string(),
+            });
         }
 
         Status::ok()

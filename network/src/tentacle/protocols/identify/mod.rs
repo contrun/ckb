@@ -17,6 +17,7 @@ use p2p::{
 
 mod protocol;
 
+use crate::TentaclePeerId;
 use crate::{peer_store::required_flags_filter, NetworkState, PeerIdentifyInfo, SupportProtocols};
 use ckb_types::{packed, prelude::*};
 
@@ -355,6 +356,7 @@ impl IdentifyCallback {
         addrs
             .into_iter()
             .take(MAX_RETURN_LISTEN_ADDRS)
+            .map(Into::into)
             .collect::<Vec<_>>()
     }
 }
@@ -387,7 +389,8 @@ impl Callback for IdentifyCallback {
             // it is possible that the node will be accidentally evicted, so it is necessary
             // to reset the last_connected_time of the node when disconnected.
             self.network_state.with_peer_store_mut(|peer_store| {
-                peer_store.update_outbound_addr_last_connected_ms(context.session.address.clone());
+                peer_store
+                    .update_outbound_addr_last_connected_ms(&(&context.session.address).into());
             });
         }
     }
@@ -407,7 +410,7 @@ impl Callback for IdentifyCallback {
                     &context.control().clone().into(),
                     context.session.id,
                     BAN_ON_NOT_SAME_NET,
-                    "The nodes are not on the same network".to_string(),
+                    "The nodes are not on the same network",
                 );
                 MisbehaveResult::Disconnect
             }
@@ -444,7 +447,7 @@ impl Callback for IdentifyCallback {
                             .peer_store
                             .lock()
                             .mut_addr_manager()
-                            .remove(&context.session.address);
+                            .remove(&(&context.session.address).into());
                     }
                     false
                 } else {
@@ -458,13 +461,13 @@ impl Callback for IdentifyCallback {
                     // but this is an unverified address
                     if renew {
                         self.network_state.with_peer_store_mut(|peer_store| {
-                            peer_store.add_outbound_addr(context.session.address.clone(), flags);
+                            peer_store.add_outbound_addr((&context.session.address).into(), flags);
                         });
                     }
 
                     if self
                         .network_state
-                        .with_peer_registry(|reg| reg.is_feeler(&context.session.address))
+                        .with_peer_registry(|reg| reg.is_feeler(&(&context.session.address).into()))
                     {
                         let _ = context
                             .open_protocols(
@@ -511,7 +514,7 @@ impl Callback for IdentifyCallback {
         );
         let flags = self.network_state.with_peer_registry_mut(|reg| {
             if let Some(peer) = reg.get_peer_mut(session.id) {
-                peer.listened_addrs = addrs.clone();
+                peer.listened_addrs = addrs.iter().map(Into::into).collect();
                 peer.identify_info
                     .as_ref()
                     .map(|a| a.flags)
@@ -522,7 +525,7 @@ impl Callback for IdentifyCallback {
         });
         self.network_state.with_peer_store_mut(|peer_store| {
             for addr in addrs {
-                if let Err(err) = peer_store.add_addr(addr.clone(), flags) {
+                if let Err(err) = peer_store.add_addr((&addr).into(), flags) {
                     error!("IdentifyProtocol failed to add address to peer store, address: {}, error: {:?}", addr, err);
                 }
             }
@@ -543,10 +546,11 @@ impl Callback for IdentifyCallback {
             return MisbehaveResult::Continue;
         }
 
-        if extract_peer_id(&addr).is_none() {
-            addr.push(Protocol::P2P(Cow::Borrowed(
-                self.network_state.local_peer_id().as_bytes(),
-            )))
+        match extract_peer_id(&addr) {
+            Some(_) => addr.push(Protocol::P2P(Cow::Borrowed(
+                TentaclePeerId::from(self.network_state.local_peer_id()).as_bytes(),
+            ))),
+            _ => {}
         }
 
         let source_addr = addr.clone();
@@ -562,7 +566,8 @@ impl Callback for IdentifyCallback {
                     })
                     .collect::<Multiaddr>()
             })
-            .chain(::std::iter::once(source_addr));
+            .chain(::std::iter::once(source_addr))
+            .map(Into::into);
 
         self.network_state.add_observed_addrs(observed_addrs_iter);
         // NOTE: for future usage
@@ -639,5 +644,25 @@ bitflags::bitflags! {
         const LIGHT_CLIENT = 0b10000;
         /// Client-side block filter protocol can provide BlockFilter download service
         const BLOCK_FILTER = 0b100000;
+    }
+}
+
+impl Flags {
+    pub fn from_support_protocols(protocols: &[SupportProtocols]) -> Self {
+        let mut flags = Self::all();
+        let protocols: Vec<SupportProtocols> = protocols.to_vec();
+
+        if !protocols.contains(&SupportProtocols::RelayV3)
+            && !protocols.contains(&SupportProtocols::RelayV2)
+        {
+            flags.remove(Flags::RELAY);
+        }
+        if !protocols.contains(&SupportProtocols::Filter) {
+            flags.remove(Flags::BLOCK_FILTER);
+        }
+        if !protocols.contains(&SupportProtocols::LightClient) {
+            flags.remove(Flags::LIGHT_CLIENT);
+        }
+        flags
     }
 }

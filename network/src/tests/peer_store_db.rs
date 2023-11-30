@@ -1,7 +1,9 @@
+use ipnetwork::IpNetwork;
+
 use crate::{
     multiaddr::Multiaddr,
     peer_store::{
-        types::{multiaddr_to_ip_network, AddrInfo, BannedAddr},
+        types::{AddrInfo, BannedAddr},
         PeerStore,
     },
     PeerId,
@@ -37,9 +39,9 @@ fn test_peer_store_persistent() {
 
     // add addrs to ban list
     let ban_list = peer_store.mut_ban_list();
-    let addr3 = multiaddr_to_ip_network(&"/ip4/127.0.0.1/tcp/42".parse().unwrap()).unwrap();
-    let addr4 = multiaddr_to_ip_network(&"/ip4/127.0.0.2/tcp/42".parse().unwrap()).unwrap();
-    let addr5 = multiaddr_to_ip_network(&"/ip4/255.0.0.1/tcp/42".parse().unwrap()).unwrap();
+    let addr3 = IpNetwork::try_from(&"/ip4/127.0.0.1/tcp/42".parse().unwrap()).unwrap();
+    let addr4 = IpNetwork::try_from(&"/ip4/127.0.0.2/tcp/42".parse().unwrap()).unwrap();
+    let addr5 = IpNetwork::try_from(&"/ip4/255.0.0.1/tcp/42".parse().unwrap()).unwrap();
     let ban1 = BannedAddr {
         address: addr3,
         ban_until: now_ms + 10_000,
@@ -174,7 +176,7 @@ fn test_peer_store_dump_with_broken_tmp_file_should_be_ok() {
     let ban_list = peer_store.mut_ban_list();
     let now_ms = ckb_systemtime::unix_time_as_millis();
     ban_list.ban(BannedAddr {
-        address: multiaddr_to_ip_network(&"/ip4/127.0.0.1/tcp/42".parse().unwrap()).unwrap(),
+        address: IpNetwork::try_from(&"/ip4/127.0.0.1/tcp/42".parse().unwrap()).unwrap(),
         ban_until: now_ms + 10_000,
         ban_reason: "test".into(),
         created_at: now_ms,

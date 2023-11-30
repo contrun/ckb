@@ -22,7 +22,10 @@ pub(crate) use self::in_ibd_process::InIBDProcess;
 
 use crate::block_status::BlockStatus;
 use crate::types::{HeaderIndexView, HeadersSyncController, IBDState, Peers, SyncShared};
-use crate::utils::{metric_ckb_message_bytes, send_message_to, MetricDirection};
+use crate::utils::{
+    metric_ckb_message_bytes, send_message_with_command_sender,
+    send_protocol_message_with_command_sender, MetricDirection,
+};
 use crate::{Status, StatusCode};
 
 use ckb_chain::chain::ChainController;
@@ -36,8 +39,9 @@ use ckb_error::Error as CKBError;
 use ckb_logger::{debug, error, info, trace, warn};
 use ckb_network::{
     async_trait, bytes::Bytes, tokio, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    ServiceControl, SupportProtocols,
+    SupportProtocols, TentacleSessionId,
 };
+use ckb_network::{Command, CommandSender};
 use ckb_stop_handler::{new_crossbeam_exit_rx, register_thread};
 use ckb_systemtime::unix_time_as_millis;
 use ckb_types::{
@@ -45,6 +49,7 @@ use ckb_types::{
     packed::{self, Byte32},
     prelude::*,
 };
+
 use std::{
     collections::HashSet,
     sync::{atomic::Ordering, Arc},
@@ -75,7 +80,7 @@ struct FetchCMD {
 
 struct BlockFetchCMD {
     sync_shared: Arc<SyncShared>,
-    p2p_control: ServiceControl,
+    command_sender: CommandSender,
     recv: channel::Receiver<FetchCMD>,
     can_start: CanStart,
     number: BlockNumber,
@@ -92,7 +97,7 @@ impl BlockFetchCMD {
                         BlockFetcher::new(Arc::clone(&self.sync_shared), peer, ibd_state).fetch()
                     {
                         for item in fetch {
-                            BlockFetchCMD::send_getblocks(item, &self.p2p_control, peer);
+                            BlockFetchCMD::send_getblocks(item, &self.command_sender, peer);
                         }
                     }
                 }
@@ -209,24 +214,31 @@ impl BlockFetchCMD {
         }
     }
 
-    fn send_getblocks(v_fetch: Vec<packed::Byte32>, nc: &ServiceControl, peer: PeerIndex) {
+    fn send_getblocks(
+        v_fetch: Vec<packed::Byte32>,
+        command_sender: &CommandSender,
+        peer: PeerIndex,
+    ) {
         let content = packed::GetBlocks::new_builder()
             .block_hashes(v_fetch.clone().pack())
             .build();
         let message = packed::SyncMessage::new_builder().set(content).build();
 
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
-        if let Err(err) = nc.send_message_to(
+        let status = send_message_with_command_sender(
+            command_sender,
+            SupportProtocols::Sync,
             peer,
-            SupportProtocols::Sync.protocol_id(),
-            message.as_bytes(),
-        ) {
-            debug!("synchronizer send GetBlocks error: {:?}", err);
+            &message,
+        );
+        if !status.is_ok() {
+            debug!("synchronizer send GetBlocks error: {:?}", status);
         }
     }
 }
 
 /// Sync protocol handle
+#[derive(Clone)]
 pub struct Synchronizer {
     pub(crate) chain: ChainController,
     /// Sync shared state
@@ -253,19 +265,19 @@ impl Synchronizer {
 
     fn try_process(
         &self,
-        nc: &dyn CKBProtocolContext,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::SyncMessageUnionReader<'_>,
     ) -> Status {
         match message {
             packed::SyncMessageUnionReader::GetHeaders(reader) => {
-                GetHeadersProcess::new(reader, self, peer, nc).execute()
+                GetHeadersProcess::new(reader, self, peer, command_sender).execute()
             }
             packed::SyncMessageUnionReader::SendHeaders(reader) => {
-                HeadersProcess::new(reader, self, peer, nc).execute()
+                HeadersProcess::new(reader, self, peer, command_sender).execute()
             }
             packed::SyncMessageUnionReader::GetBlocks(reader) => {
-                GetBlocksProcess::new(reader, self, peer, nc).execute()
+                GetBlocksProcess::new(reader, self, peer, command_sender).execute()
             }
             packed::SyncMessageUnionReader::SendBlock(reader) => {
                 if reader.check_data() {
@@ -274,19 +286,21 @@ impl Synchronizer {
                     StatusCode::ProtocolMessageIsMalformed.with_context("SendBlock is invalid")
                 }
             }
-            packed::SyncMessageUnionReader::InIBD(_) => InIBDProcess::new(self, peer, nc).execute(),
+            packed::SyncMessageUnionReader::InIBD(_) => {
+                InIBDProcess::new(self, peer, command_sender).execute()
+            }
         }
     }
 
-    fn process(
+    pub fn process(
         &self,
-        nc: &dyn CKBProtocolContext,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::SyncMessageUnionReader<'_>,
     ) {
         let item_name = message.item_name();
         let item_bytes = message.as_slice().len() as u64;
-        let status = self.try_process(nc, peer, message);
+        let status = self.try_process(command_sender.clone(), peer, message);
 
         metric_ckb_message_bytes(
             MetricDirection::In,
@@ -301,12 +315,51 @@ impl Synchronizer {
                 "receive {} from {}, ban {:?} for {}",
                 item_name, peer, ban_time, status
             );
-            nc.ban_peer(peer, ban_time, status.to_string());
+            command_sender.send(Command::Ban {
+                peer,
+                duration: ban_time,
+                reason: status.to_string(),
+            });
         } else if status.should_warn() {
             warn!("receive {} from {}, {}", item_name, peer, status);
         } else if !status.is_ok() {
             debug!("receive {} from {}, {}", item_name, peer, status);
         }
+    }
+
+    async fn process_notify(&mut self, command_sender: CommandSender, token: u64) {
+        let start_time = Instant::now();
+        trace!("start notify token={}", token);
+        match token {
+            SEND_GET_HEADERS_TOKEN => {
+                self.start_sync_headers(command_sender);
+            }
+            IBD_BLOCK_FETCH_TOKEN => {
+                if self.shared.active_chain().is_initial_block_download() {
+                    self.find_blocks_to_fetch(command_sender, IBDState::In);
+                } else {
+                    // We need to remove notify here which can't be done with only a CommandSender.
+                    // Removing notify should have been done by the caller of this function.
+                    unreachable!("Should have been processed in the caller");
+                }
+            }
+            NOT_IBD_BLOCK_FETCH_TOKEN => {
+                if !self.shared.active_chain().is_initial_block_download() {
+                    self.find_blocks_to_fetch(command_sender, IBDState::Out);
+                }
+            }
+            TIMEOUT_EVICTION_TOKEN => {
+                self.eviction(command_sender);
+            }
+            // Here is just for NO_PEER_CHECK_TOKEN token, only handle it when there is no peer.
+            _ => {}
+        }
+
+        trace!(
+            "finished notify token={} cost={:?}",
+            token,
+            Instant::now().saturating_duration_since(start_time)
+        );
     }
 
     /// Get peers info
@@ -388,7 +441,7 @@ impl Synchronizer {
     //     and set a shorter timeout, HEADERS_RESPONSE_TIME seconds in future.
     //     If their best known block is still behind when that new timeout is
     //     reached, disconnect.
-    pub fn eviction(&self, nc: &dyn CKBProtocolContext) {
+    pub fn eviction(&self, command_sender: CommandSender) {
         let active_chain = self.shared.active_chain();
         let mut eviction = Vec::new();
         let better_tip_header = self.better_tip_header();
@@ -405,7 +458,7 @@ impl Synchronizer {
                     }
                 } else {
                     active_chain.send_getheaders_to_peer(
-                        nc,
+                        &command_sender,
                         *peer,
                         better_tip_header.number_and_hash(),
                     );
@@ -470,7 +523,7 @@ impl Synchronizer {
                         state.chain_sync.sent_getheaders = true;
                         state.chain_sync.timeout = now + EVICTION_HEADERS_RESPONSE_TIME;
                         active_chain.send_getheaders_to_peer(
-                            nc,
+                            &command_sender,
                             *peer,
                             state
                                 .chain_sync
@@ -485,13 +538,14 @@ impl Synchronizer {
         }
         for peer in eviction {
             info!("timeout eviction peer={}", peer);
-            if let Err(err) = nc.disconnect(peer, "sync timeout eviction") {
-                debug!("synchronizer disconnect error: {:?}", err);
-            }
+            command_sender.send(Command::Disconnect {
+                peer,
+                message: "sync timeout eviction".to_string(),
+            });
         }
     }
 
-    fn start_sync_headers(&self, nc: &dyn CKBProtocolContext) {
+    pub fn start_sync_headers(&self, command_sender: CommandSender) {
         let now = unix_time_as_millis();
         let active_chain = self.shared.active_chain();
         let ibd = active_chain.is_initial_block_download();
@@ -503,6 +557,7 @@ impl Synchronizer {
             .map(|kv_pair| *kv_pair.key())
             .collect();
 
+        dbg!(&peers);
         if peers.is_empty() {
             return;
         }
@@ -533,7 +588,7 @@ impl Synchronizer {
             }
 
             debug!("start sync peer={}", peer);
-            active_chain.send_getheaders_to_peer(nc, peer, tip.number_and_hash());
+            active_chain.send_getheaders_to_peer(&command_sender, peer, tip.number_and_hash());
         }
     }
 
@@ -578,7 +633,7 @@ impl Synchronizer {
         peers
     }
 
-    fn find_blocks_to_fetch(&mut self, nc: &dyn CKBProtocolContext, ibd: IBDState) {
+    fn find_blocks_to_fetch(&mut self, command_sender: CommandSender, ibd: IBDState) {
         let tip = self.shared.active_chain().tip_number();
 
         let disconnect_list = {
@@ -610,64 +665,56 @@ impl Synchronizer {
             {
                 continue;
             }
-            if let Err(err) = nc.disconnect(*peer, "sync disconnect") {
-                debug!("synchronizer disconnect error: {:?}", err);
-            }
+            command_sender.send(Command::Disconnect {
+                peer: *peer,
+                message: "sync disconnect".to_string(),
+            });
         }
 
         // fetch use a lot of cpu time, especially in ibd state
         // so, the fetch function use another thread
-        match nc.p2p_control() {
-            Some(raw) => match self.fetch_channel {
-                Some(ref sender) => {
-                    if !sender.is_full() {
-                        let peers = self.get_peers_to_fetch(ibd, &disconnect_list);
-                        let _ignore = sender.try_send(FetchCMD {
-                            peers,
-                            ibd_state: ibd,
-                        });
-                    }
-                }
-                None => {
-                    let p2p_control = raw.clone();
-                    let (sender, recv) = channel::bounded(2);
+        // TODO: I don't really understand the original code, which checked if nc.p2p_control is Some.
+        // https://github.com/nervosnetwork/ckb/blob/7a3e0b7099f05daf835afb0cbb8eb986bc0edad2/sync/src/synchronizer/mod.rs#L617-L619
+        // I delete the None branch to refactor the code more easily.
+        match self.fetch_channel {
+            Some(ref sender) => {
+                if !sender.is_full() {
                     let peers = self.get_peers_to_fetch(ibd, &disconnect_list);
-                    sender
-                        .send(FetchCMD {
-                            peers,
-                            ibd_state: ibd,
-                        })
-                        .unwrap();
-                    self.fetch_channel = Some(sender);
-                    let thread = ::std::thread::Builder::new();
-                    let number = self.shared.state().shared_best_header_ref().number();
-                    const THREAD_NAME: &str = "BlockDownload";
-                    let sync_shared: Arc<SyncShared> = Arc::to_owned(self.shared());
-                    let blockdownload_jh = thread
-                        .name(THREAD_NAME.into())
-                        .spawn(move || {
-                            let stop_signal = new_crossbeam_exit_rx();
-                            BlockFetchCMD {
-                                sync_shared,
-                                p2p_control,
-                                recv,
-                                number,
-                                can_start: CanStart::MinWorkNotReach,
-                            }
-                            .run(stop_signal);
-                        })
-                        .expect("download thread can't start");
-                    register_thread(THREAD_NAME, blockdownload_jh);
+                    let _ignore = sender.try_send(FetchCMD {
+                        peers,
+                        ibd_state: ibd,
+                    });
                 }
-            },
+            }
             None => {
-                for peer in self.get_peers_to_fetch(ibd, &disconnect_list) {
-                    if let Some(fetch) = self.get_blocks_to_fetch(peer, ibd) {
-                        for item in fetch {
-                            self.send_getblocks(item, nc, peer);
+                let (sender, recv) = channel::bounded(2);
+                let peers = self.get_peers_to_fetch(ibd, &disconnect_list);
+                sender
+                    .send(FetchCMD {
+                        peers,
+                        ibd_state: ibd,
+                    })
+                    .unwrap();
+                self.fetch_channel = Some(sender);
+                let thread = ::std::thread::Builder::new();
+                let number = self.shared.state().shared_best_header_ref().number();
+                const THREAD_NAME: &str = "BlockDownload";
+                let sync_shared: Arc<SyncShared> = Arc::to_owned(self.shared());
+                let blockdownload_jh = thread
+                    .name(THREAD_NAME.into())
+                    .spawn(move || {
+                        let stop_signal = new_crossbeam_exit_rx();
+                        BlockFetchCMD {
+                            sync_shared,
+                            command_sender,
+                            recv,
+                            number,
+                            can_start: CanStart::MinWorkNotReach,
                         }
-                    }
-                }
+                        .run(stop_signal);
+                    })
+                    .expect("download thread can't start");
+                register_thread(THREAD_NAME, blockdownload_jh);
             }
         }
     }
@@ -675,7 +722,7 @@ impl Synchronizer {
     fn send_getblocks(
         &self,
         v_fetch: Vec<packed::Byte32>,
-        nc: &dyn CKBProtocolContext,
+        command_sender: &CommandSender,
         peer: PeerIndex,
     ) {
         let content = packed::GetBlocks::new_builder()
@@ -684,7 +731,71 @@ impl Synchronizer {
         let message = packed::SyncMessage::new_builder().set(content).build();
 
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
-        let _status = send_message_to(nc, peer, &message);
+        let _status = send_protocol_message_with_command_sender(command_sender, peer, &message);
+    }
+
+    pub fn read_sync_message_or_ban<'r>(
+        &self,
+        data: &'r [u8],
+        peer: PeerIndex,
+        command_sender: CommandSender,
+    ) -> Option<packed::SyncMessageUnionReader<'r>> {
+        let msg = match packed::SyncMessageReader::from_compatible_slice(&data) {
+            Ok(msg) => {
+                let item = msg.to_enum();
+                if let packed::SyncMessageUnionReader::SendBlock(ref reader) = item {
+                    if reader.has_extra_fields() || reader.block().count_extra_fields() > 1 {
+                        info!(
+                            "Peer {} sends us a malformed message: \
+                             too many fields in SendBlock",
+                            peer
+                        );
+                        command_sender.send(Command::Ban {
+                            peer,
+                            duration: BAD_MESSAGE_BAN_TIME,
+                            reason: String::from(
+                                "send us a malformed message: \
+                                 too many fields in SendBlock",
+                            ),
+                        });
+                        return None;
+                    } else {
+                        item
+                    }
+                } else {
+                    match packed::SyncMessageReader::from_slice(&data) {
+                        Ok(msg) => msg.to_enum(),
+                        _ => {
+                            info!(
+                                "Peer {} sends us a malformed message: \
+                                 too many fields",
+                                peer
+                            );
+                            command_sender.send(Command::Ban {
+                                peer,
+                                duration: BAD_MESSAGE_BAN_TIME,
+                                reason: String::from(
+                                    "send us a malformed message: \
+                                     too many fields",
+                                ),
+                            });
+                            return None;
+                        }
+                    }
+                }
+            }
+            _ => {
+                info!("Peer {} sends us a malformed message", peer);
+                command_sender.send(Command::Ban {
+                    peer,
+                    duration: BAD_MESSAGE_BAN_TIME,
+                    reason: String::from("send us a malformed message"),
+                });
+                return None;
+            }
+        };
+
+        Some(msg)
     }
 }
 
@@ -712,65 +823,16 @@ impl CKBProtocolHandler for Synchronizer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
-        let msg = match packed::SyncMessageReader::from_compatible_slice(&data) {
-            Ok(msg) => {
-                let item = msg.to_enum();
-                if let packed::SyncMessageUnionReader::SendBlock(ref reader) = item {
-                    if reader.has_extra_fields() || reader.block().count_extra_fields() > 1 {
-                        info!(
-                            "Peer {} sends us a malformed message: \
-                             too many fields in SendBlock",
-                            peer_index
-                        );
-                        nc.ban_peer(
-                            peer_index,
-                            BAD_MESSAGE_BAN_TIME,
-                            String::from(
-                                "send us a malformed message: \
-                                 too many fields in SendBlock",
-                            ),
-                        );
-                        return;
-                    } else {
-                        item
-                    }
-                } else {
-                    match packed::SyncMessageReader::from_slice(&data) {
-                        Ok(msg) => msg.to_enum(),
-                        _ => {
-                            info!(
-                                "Peer {} sends us a malformed message: \
-                                 too many fields",
-                                peer_index
-                            );
-                            nc.ban_peer(
-                                peer_index,
-                                BAD_MESSAGE_BAN_TIME,
-                                String::from(
-                                    "send us a malformed message: \
-                                     too many fields",
-                                ),
-                            );
-                            return;
-                        }
-                    }
-                }
-            }
-            _ => {
-                info!("Peer {} sends us a malformed message", peer_index);
-                nc.ban_peer(
-                    peer_index,
-                    BAD_MESSAGE_BAN_TIME,
-                    String::from("send us a malformed message"),
-                );
-                return;
-            }
+        let peer = session_id.into();
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
+        let msg = match self.read_sync_message_or_ban(&data, peer, command_sender.clone()) {
+            Some(msg) => msg,
+            None => return,
         };
-
-        debug!("received msg {} from {}", msg.item_name(), peer_index);
+        debug!("received msg {} from {}", msg.item_name(), peer);
         #[cfg(feature = "with_sentry")]
         {
             let sentry_hub = sentry::Hub::current();
@@ -782,11 +844,14 @@ impl CKBProtocolHandler for Synchronizer {
         }
 
         let start_time = Instant::now();
-        tokio::task::block_in_place(|| self.process(nc.as_ref(), peer_index, msg));
+        tokio::task::block_in_place(move || {
+            tokio::task::block_in_place(move || self.process(command_sender, peer, msg));
+        });
+        let _ = nc.process_command_stream(command_receiver).await;
         debug!(
             "process message={}, peer={}, cost={:?}",
             msg.item_name(),
-            peer_index,
+            peer,
             Instant::now().saturating_duration_since(start_time),
         );
     }
@@ -794,9 +859,10 @@ impl CKBProtocolHandler for Synchronizer {
     async fn connected(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         _version: &str,
     ) {
+        let peer_index = session_id.into();
         info!("SyncProtocol.connected peer={}", peer_index);
         self.on_connected(nc.as_ref(), peer_index);
     }
@@ -804,52 +870,36 @@ impl CKBProtocolHandler for Synchronizer {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
     ) {
+        let peer_index = session_id.into();
         let sync_state = self.shared().state();
         sync_state.disconnected(peer_index);
     }
 
     async fn notify(&mut self, nc: Arc<dyn CKBProtocolContext + Sync>, token: u64) {
-        if !self.peers().state.is_empty() {
-            let start_time = Instant::now();
-            trace!("start notify token={}", token);
-            match token {
-                SEND_GET_HEADERS_TOKEN => {
-                    self.start_sync_headers(nc.as_ref());
-                }
-                IBD_BLOCK_FETCH_TOKEN => {
-                    if self.shared.active_chain().is_initial_block_download() {
-                        self.find_blocks_to_fetch(nc.as_ref(), IBDState::In);
-                    } else {
-                        {
-                            self.shared.state().write_inflight_blocks().adjustment = false;
-                        }
-                        self.shared.state().peers().clear_unknown_list();
-                        if nc.remove_notify(IBD_BLOCK_FETCH_TOKEN).await.is_err() {
-                            trace!("remove ibd block fetch fail");
-                        }
-                    }
-                }
-                NOT_IBD_BLOCK_FETCH_TOKEN => {
-                    if !self.shared.active_chain().is_initial_block_download() {
-                        self.find_blocks_to_fetch(nc.as_ref(), IBDState::Out);
-                    }
-                }
-                TIMEOUT_EVICTION_TOKEN => {
-                    self.eviction(nc.as_ref());
-                }
-                // Here is just for NO_PEER_CHECK_TOKEN token, only handle it when there is no peer.
-                _ => {}
+        match token {
+            NO_PEER_CHECK_TOKEN if self.peers().state.is_empty() => {
+                debug!("no peers connected");
+                return;
             }
-
-            trace!(
-                "finished notify token={} cost={:?}",
-                token,
-                Instant::now().saturating_duration_since(start_time)
-            );
-        } else if token == NO_PEER_CHECK_TOKEN {
-            debug!("no peers connected");
-        }
+            IBD_BLOCK_FETCH_TOKEN => {
+                {
+                    self.shared.state().write_inflight_blocks().adjustment = false;
+                }
+                self.shared.state().peers().clear_unknown_list();
+                if nc.remove_notify(IBD_BLOCK_FETCH_TOKEN).await.is_err() {
+                    trace!("remove ibd block fetch fail");
+                }
+            }
+            _ => {
+                let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
+                let _ = futures::future::join(
+                    self.process_notify(command_sender, token),
+                    nc.process_command_stream(command_receiver),
+                )
+                .await;
+            }
+        };
     }
 }

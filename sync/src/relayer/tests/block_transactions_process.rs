@@ -1,7 +1,7 @@
 use crate::relayer::block_transactions_process::BlockTransactionsProcess;
 use crate::relayer::tests::helper::{build_chain, MockProtocolContext};
 use crate::{Status, StatusCode};
-use ckb_network::{PeerIndex, SupportProtocols};
+use ckb_network::{PeerIndex, SupportProtocols, TentacleSessionId};
 use ckb_store::ChainStore;
 use ckb_tx_pool::{PlugTarget, TxEntry};
 use ckb_types::prelude::*;
@@ -19,8 +19,8 @@ use std::sync::Arc;
 #[test]
 fn test_accept_block() {
     let (relayer, _) = build_chain(5);
-    let peer_index: PeerIndex = 100.into();
-    let other_peer_index: PeerIndex = 101.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
+    let other_peer_index: PeerIndex = TentacleSessionId::from(101).into();
 
     let tx1 = TransactionBuilder::default().build();
     let tx2 = TransactionBuilder::default()
@@ -98,7 +98,7 @@ fn test_accept_block() {
 #[test]
 fn test_unknown_request() {
     let (relayer, _) = build_chain(5);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let tx1 = TransactionBuilder::default().build();
     let tx2 = TransactionBuilder::default()
@@ -118,7 +118,7 @@ fn test_unknown_request() {
 
     let compact_block = CompactBlock::build_from_block(&block, &prefilled);
 
-    let foo_peer_index: PeerIndex = 998.into();
+    let foo_peer_index: PeerIndex = TentacleSessionId::from(998).into();
     {
         let mut pending_compact_blocks = relayer.shared.state().pending_compact_blocks();
         pending_compact_blocks.insert(
@@ -151,7 +151,7 @@ fn test_unknown_request() {
 #[test]
 fn test_invalid_transaction_root() {
     let (relayer, _) = build_chain(5);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let tx1 = TransactionBuilder::default().build();
     let tx2 = TransactionBuilder::default()
@@ -228,7 +228,7 @@ fn test_collision_and_send_missing_indexes() {
         .unwrap();
     let last_cellbase = last_block.transactions().first().cloned().unwrap();
 
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let tx1 = TransactionBuilder::default().build();
     let tx2 = TransactionBuilder::default()
@@ -364,7 +364,7 @@ fn test_missing() {
     //  4. Relayer must make another request for tx2 and tx3
 
     let (relayer, _) = build_chain(5);
-    let peer_index: PeerIndex = 100.into();
+    let peer_index: PeerIndex = TentacleSessionId::from(100).into();
 
     let tx1 = TransactionBuilder::default().build();
     let tx2 = TransactionBuilder::default()

@@ -3,13 +3,12 @@ pub(crate) mod discovery;
 pub(crate) mod feeler;
 pub(crate) mod identify;
 pub(crate) mod ping;
-pub(crate) mod support_protocols;
 
 #[cfg(test)]
 mod tests;
 
 use ckb_logger::{debug, trace};
-use futures::{Future, FutureExt};
+use futures::Future;
 use p2p::{
     async_trait,
     builder::MetaBuilder,
@@ -19,22 +18,18 @@ use p2p::{
     traits::ServiceProtocol,
     ProtocolId, SessionId,
 };
-use std::{
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
+use tokio::{select, sync::mpsc};
 use tokio_util::codec::length_delimited;
 
-/// Alias session id
-pub type PeerIndex = SessionId;
+use crate::{Command, PeerIndex};
+
 /// Boxed future task
 pub type BoxedFutureTask = Pin<Box<dyn Future<Output = ()> + 'static + Send>>;
 
 use crate::{
     compress::{compress, decompress},
-    network::{async_disconnect_with_message, disconnect_with_message},
+    network::{tentacle_async_disconnect_with_message, tentacle_disconnect_with_message},
     Behaviour, Error, NetworkState, Peer, ProtocolVersion, SupportProtocols,
 };
 
@@ -67,8 +62,6 @@ pub trait CKBProtocolContext: Send {
         target: TargetSession,
         data: Bytes,
     ) -> Result<(), Error>;
-    /// spawn a future task, if `blocking` is true we use tokio_threadpool::blocking to handle the task.
-    async fn async_future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error>;
     /// Send message
     async fn async_send_message(
         &self,
@@ -94,8 +87,6 @@ pub trait CKBProtocolContext: Send {
     fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error>;
     /// Filter broadcast message through quick queue
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error>;
-    /// spawn a future task, if `blocking` is true we use tokio_threadpool::blocking to handle the task.
-    fn future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error>;
     /// Send message
     fn send_message(
         &self,
@@ -126,8 +117,82 @@ pub trait CKBProtocolContext: Send {
     fn p2p_control(&self) -> Option<&ServiceControl> {
         None
     }
+    async fn process_command(&self, command: Command) {
+        match command {
+            Command::Dial { multiaddr: _ } => {
+                todo!("Implement dial for tentacle");
+            }
+            Command::SendMessage {
+                protocol,
+                peer,
+                message,
+            } => {
+                let result = self.send_message(protocol.protocol_id(), peer, message);
+                if let Err(e) = result {
+                    debug!("Failed to send message to peer {}: {:?}", peer, e);
+                };
+            }
+            Command::Ban {
+                peer,
+                duration,
+                reason,
+            } => self.ban_peer(peer, duration, reason),
+            Command::Disconnect {
+                peer,
+                message,
+            } => {
+                let result = self.disconnect(peer, &message);
+                if let Err(e) = result {
+                    debug!("Failed to disconnect from peer {}: {:?}", peer, e)
+                };
+            }
+            Command::GetPeer { peer, sender } => {
+                let result = sender.send(self.get_peer(peer));
+                if let Err(e) = result {
+                    debug!(
+                        "Failed to send response of get_peer (peer: {}): {:?}",
+                        peer, e
+                    );
+                };
+            }
+            Command::GetConnectedPeers { sender } => {
+                let result = sender.send(self.connected_peers());
+                if let Err(e) = result {
+                    debug!("Failed to send response of get connected peers: {:?}", e)
+                };
+            }
+            Command::Report {
+                peer,
+                behaviour,
+            } => self.report_peer(peer, behaviour),
+            Command::FilterBroadCast {
+                // TODO: need to send message to the specific protocol.
+                protocol: _,
+                target,
+                message,
+                quick,
+            } => {
+                let target = target.try_into().expect("Must be a tentacle broadcast target");
+                let result = if quick {
+                    self.quick_filter_broadcast(target, message)
+                } else {
+                    self.filter_broadcast(target, message)
+                };
+                if let Err(e) = result {
+                    debug!("Failed to send broadcast: {:?}", e)
+                };
+            }
+        }
+    }
+    async fn process_command_stream(&self, mut stream: mpsc::Receiver<Command>) {
+        loop {
+            select! {
+                Some(command) = stream.recv() => self.process_command(command).await,
+                else => break
+            }
+        }
+    }
 }
-
 /// Abstract protocol handle base on tentacle service handle
 #[async_trait]
 pub trait CKBProtocolHandler: Sync + Send {
@@ -137,7 +202,7 @@ pub trait CKBProtocolHandler: Sync + Send {
     async fn connected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        _peer_index: PeerIndex,
+        _peer_index: SessionId,
         _version: &str,
     ) {
     }
@@ -145,14 +210,14 @@ pub trait CKBProtocolHandler: Sync + Send {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        _peer_index: PeerIndex,
+        _peer_index: SessionId,
     ) {
     }
     /// Called when the corresponding protocol message is received
     async fn received(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        _peer_index: PeerIndex,
+        _peer_index: SessionId,
         _data: Bytes,
     ) {
     }
@@ -166,7 +231,7 @@ pub trait CKBProtocolHandler: Sync + Send {
 
 /// Help to build protocol meta
 pub struct CKBProtocol {
-    id: ProtocolId,
+    protocol: SupportProtocols,
     // for example: b"/ckb/"
     protocol_name: String,
     // supported version, used to check protocol version
@@ -180,14 +245,14 @@ impl CKBProtocol {
     /// New with support protocol
     // a helper constructor to build `CKBProtocol` with `SupportProtocols` enum
     pub fn new_with_support_protocol(
-        support_protocol: support_protocols::SupportProtocols,
+        support_protocol: SupportProtocols,
         handler: Box<dyn CKBProtocolHandler>,
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
-            id: support_protocol.protocol_id(),
-            max_frame_length: support_protocol.max_frame_length(),
+            protocol: support_protocol,
             protocol_name: support_protocol.name(),
+            max_frame_length: support_protocol.max_frame_length(),
             supported_versions: support_protocol.support_versions(),
             network_state,
             handler,
@@ -204,7 +269,7 @@ impl CKBProtocol {
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
-            id,
+            protocol: id.into(),
             max_frame_length,
             network_state,
             handler,
@@ -219,7 +284,7 @@ impl CKBProtocol {
 
     /// Protocol id
     pub fn id(&self) -> ProtocolId {
-        self.id
+        self.protocol.protocol_id()
     }
 
     /// Protocol name
@@ -242,7 +307,7 @@ impl CKBProtocol {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
         MetaBuilder::default()
-            .id(self.id)
+            .id(self.id())
             .name(move |_| protocol_name.clone())
             .codec(move || {
                 Box::new(
@@ -254,7 +319,7 @@ impl CKBProtocol {
             .support_versions(supported_versions)
             .service_handle(move || {
                 ProtocolHandle::Callback(Box::new(CKBHandler {
-                    proto_id: self.id,
+                    proto_id: self.id(),
                     network_state: Arc::clone(&self.network_state),
                     handler: self.handler,
                 }))
@@ -290,7 +355,7 @@ impl ServiceProtocol for CKBHandler {
             .network_state
             .ckb2023
             .load(std::sync::atomic::Ordering::SeqCst)
-            && version != crate::protocols::support_protocols::LASTEST_VERSION
+            && version != crate::support_protocols::LASTEST_VERSION
             && context.proto_id != SupportProtocols::RelayV2.protocol_id()
         {
             debug!(
@@ -423,14 +488,16 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
-            "[send message]: {}, to={}, length={}",
+            "[send message]: {}, to={:?}, length={}",
             proto_id,
             peer_index,
             data.len()
         );
-        self.async_p2p_control
-            .quick_send_message_to(peer_index, proto_id, data)
-            .await?;
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .quick_send_message_to(session_id, proto_id, data)
+                .await?;
+        }
         Ok(())
     }
     async fn async_quick_send_message_to(
@@ -444,10 +511,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.async_p2p_control
-            .quick_send_message_to(peer_index, self.proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .quick_send_message_to(session_id, self.proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_quick_filter_broadcast(
         &self,
@@ -457,15 +527,6 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
         self.async_p2p_control
             .quick_filter_broadcast(target, self.proto_id, data)
             .await?;
-        Ok(())
-    }
-    async fn async_future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error> {
-        let task = if blocking {
-            Box::pin(BlockingFutureTask::new(task))
-        } else {
-            task
-        };
-        self.async_p2p_control.future_task(task).await?;
         Ok(())
     }
     async fn async_send_message(
@@ -480,10 +541,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.async_p2p_control
-            .send_message_to(peer_index, proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .send_message_to(session_id, proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -492,10 +556,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.async_p2p_control
-            .send_message_to(peer_index, self.proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .send_message_to(session_id, self.proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_filter_broadcast(
         &self,
@@ -509,8 +576,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        async_disconnect_with_message(&self.async_p2p_control, peer_index, message).await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            tentacle_async_disconnect_with_message(&self.async_p2p_control, session_id, message)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_send_message(
         &self,
@@ -524,9 +595,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.p2p_control
-            .quick_send_message_to(peer_index, proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .quick_send_message_to(session_id, proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -535,22 +609,16 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.p2p_control
-            .quick_send_message_to(peer_index, self.proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .quick_send_message_to(session_id, self.proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
         self.p2p_control
             .quick_filter_broadcast(target, self.proto_id, data)?;
-        Ok(())
-    }
-    fn future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error> {
-        let task = if blocking {
-            Box::pin(BlockingFutureTask::new(task))
-        } else {
-            task
-        };
-        self.p2p_control.future_task(task)?;
         Ok(())
     }
     fn send_message(
@@ -565,9 +633,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.p2p_control
-            .send_message_to(peer_index, proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .send_message_to(session_id, proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -576,9 +647,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        self.p2p_control
-            .send_message_to(peer_index, self.proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .send_message_to(session_id, self.proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
         self.p2p_control
@@ -587,8 +661,11 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        disconnect_with_message(&self.p2p_control, peer_index, message)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            tentacle_disconnect_with_message(&self.p2p_control, session_id, message)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
 
     fn get_peer(&self, peer_index: PeerIndex) -> Option<Peer> {
@@ -607,22 +684,29 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
                 .iter()
                 .filter_map(|(peer_index, peer)| {
                     if peer.protocols.contains_key(&self.proto_id) {
-                        Some(peer_index)
+                        Some(*peer_index)
                     } else {
                         None
                     }
                 })
-                .cloned()
                 .collect()
         })
     }
     fn report_peer(&self, peer_index: PeerIndex, behaviour: Behaviour) {
-        self.network_state
-            .report_session(&self.p2p_control, peer_index, behaviour);
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.network_state
+                .report_session(&self.p2p_control, session_id, behaviour);
+            return;
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
-        self.network_state
-            .ban_session(&self.p2p_control, peer_index, duration, reason);
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.network_state
+                .ban_session(&self.p2p_control, session_id, duration, &reason);
+            return;
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
 
     fn protocol_id(&self) -> ProtocolId {
@@ -631,23 +715,5 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
 
     fn p2p_control(&self) -> Option<&ServiceControl> {
         Some(&self.p2p_control)
-    }
-}
-
-pub(crate) struct BlockingFutureTask {
-    task: BoxedFutureTask,
-}
-
-impl BlockingFutureTask {
-    pub(crate) fn new(task: BoxedFutureTask) -> BlockingFutureTask {
-        BlockingFutureTask { task }
-    }
-}
-
-impl Future for BlockingFutureTask {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        tokio::task::block_in_place(|| self.task.poll_unpin(cx))
     }
 }
