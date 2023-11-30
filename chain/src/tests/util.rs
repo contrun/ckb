@@ -5,7 +5,7 @@ use ckb_chain_spec::consensus::{Consensus, ConsensusBuilder};
 use ckb_dao::DaoCalculator;
 use ckb_dao_utils::genesis_dao_data;
 use ckb_jsonrpc_types::ScriptHashType;
-use ckb_network::{Flags, NetworkController, NetworkService, NetworkState};
+use ckb_network::{Flags, NetworkController, NetworkState, TentacleNetworkService};
 use ckb_shared::{Shared, SharedBuilder};
 use ckb_store::ChainStore;
 pub use ckb_test_chain_utils::MockStore;
@@ -304,7 +304,7 @@ pub(crate) fn dummy_network(shared: &Shared) -> NetworkController {
 
     let network_state =
         Arc::new(NetworkState::from_config(config).expect("Init network state failed"));
-    NetworkService::new(
+    TentacleNetworkService::new(
         network_state,
         vec![],
         vec![],

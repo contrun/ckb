@@ -18,6 +18,7 @@ pub mod peer_store;
 mod protocols;
 mod services;
 
+mod tentacle;
 #[cfg(test)]
 mod tests;
 
@@ -25,8 +26,8 @@ pub use crate::{
     behaviour::Behaviour,
     errors::Error,
     network::{
-        DefaultExitHandler, EventHandler, ExitHandler, NetworkController, NetworkService,
-        NetworkState,
+        DefaultExitHandler, ExitHandler, NetworkController, NetworkState, TentacleEventHandler,
+        TentacleNetworkService,
     },
     peer::{Peer, PeerIdentifyInfo},
     peer_registry::PeerRegistry,

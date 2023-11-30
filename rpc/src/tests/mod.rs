@@ -4,7 +4,7 @@ use ckb_chain::chain::{ChainController, ChainService};
 use ckb_chain_spec::consensus::Consensus;
 use ckb_dao::DaoCalculator;
 use ckb_jsonrpc_types::ScriptHashType;
-use ckb_network::{Flags, NetworkService, NetworkState};
+use ckb_network::{Flags, NetworkState, TentacleNetworkService};
 use ckb_reward_calculator::RewardCalculator;
 use ckb_shared::{Shared, SharedBuilder, Snapshot};
 use ckb_store::ChainStore;
@@ -241,7 +241,7 @@ fn setup(consensus: Consensus) -> RpcTestSuite {
         };
         let network_state =
             Arc::new(NetworkState::from_config(network_config).expect("Init network state failed"));
-        NetworkService::new(
+        TentacleNetworkService::new(
             Arc::clone(&network_state),
             Vec::new(),
             Vec::new(),

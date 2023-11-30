@@ -14,8 +14,8 @@ use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
 use ckb_network::{
-    observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkService,
-    NetworkState, SupportProtocols,
+    observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
+    SupportProtocols, TentacleNetworkService,
 };
 use ckb_network_alert::alert_relayer::AlertRelayer;
 use ckb_proposal_table::ProposalTable;
@@ -361,7 +361,7 @@ impl Launcher {
 
         let required_protocol_ids = vec![SupportProtocols::Sync.protocol_id()];
 
-        let network_controller = NetworkService::new(
+        let network_controller = TentacleNetworkService::new(
             Arc::clone(&network_state),
             protocols,
             required_protocol_ids,

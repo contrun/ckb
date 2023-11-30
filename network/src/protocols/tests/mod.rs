@@ -7,7 +7,7 @@ use super::{
 };
 
 use crate::{
-    network::EventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
+    network::TentacleEventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
     NetworkState, PeerIdentifyInfo, SupportProtocols,
 };
 
@@ -221,7 +221,7 @@ fn net_service_start(
         .key_pair(network_state.local_private_key().clone())
         .upnp(config.upnp)
         .forever(true)
-        .build(EventHandler {
+        .build(TentacleEventHandler {
             network_state: Arc::clone(&network_state),
         });
 

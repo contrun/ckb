@@ -4,8 +4,8 @@ use ckb_chain::chain::ChainService;
 use ckb_chain_spec::consensus::{build_genesis_epoch_ext, ConsensusBuilder};
 use ckb_network::{
     async_trait, bytes::Bytes as P2pBytes, Behaviour, CKBProtocolContext, Error, Flags,
-    NetworkController, NetworkService, NetworkState, Peer, PeerIndex, ProtocolId, SupportProtocols,
-    TargetSession,
+    NetworkController, NetworkState, Peer, PeerIndex, ProtocolId, SupportProtocols, TargetSession,
+    TentacleNetworkService,
 };
 use ckb_shared::{Shared, SharedBuilder};
 use ckb_store::ChainStore;
@@ -112,7 +112,7 @@ pub(crate) fn dummy_network(shared: &Shared) -> NetworkController {
 
     let network_state =
         Arc::new(NetworkState::from_config(config).expect("Init network state failed"));
-    NetworkService::new(
+    TentacleNetworkService::new(
         network_state,
         vec![],
         vec![],
