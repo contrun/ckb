@@ -1,7 +1,15 @@
+pub mod protocols;
+
 use crate::errors::{Error, P2PError};
 use crate::network::disconnect_with_message;
 
-use crate::protocols::{
+use crate::services::{
+    dump_peer_store::DumpPeerStoreService, outbound_peer::OutboundPeerService,
+    protocol_type_checker::ProtocolTypeCheckerService,
+};
+use crate::NetworkController;
+use crate::NetworkState;
+use protocols::{
     disconnect_message::DisconnectMessageProtocol,
     discovery::{DiscoveryAddressManager, DiscoveryProtocol},
     feeler::Feeler,
@@ -9,12 +17,6 @@ use crate::protocols::{
     ping::PingHandler,
     support_protocols::SupportProtocols,
 };
-use crate::services::{
-    dump_peer_store::DumpPeerStoreService, outbound_peer::OutboundPeerService,
-    protocol_type_checker::ProtocolTypeCheckerService,
-};
-use crate::NetworkController;
-use crate::NetworkState;
 
 use crate::{CKBProtocol, PeerIndex, ProtocolId, ServiceControl};
 use ckb_app_config::{default_support_all_protocols, SupportProtocol};

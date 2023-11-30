@@ -2,35 +2,28 @@
 pub use super::tentacle::EventHandler as TentacleEventHandler;
 pub use super::tentacle::NetworkService as TentacleNetworkService;
 
-use crate::errors::{Error};
+use crate::errors::Error;
 use crate::peer_registry::{ConnectionStatus, PeerRegistry};
 use crate::peer_store::{
     types::{AddrInfo, BannedAddr},
     PeerStore,
 };
-use crate::protocols::{
-    identify::{Flags},
-    support_protocols::SupportProtocols,
-};
+use crate::tentacle::protocols::{identify::Flags, support_protocols::SupportProtocols};
 
 use crate::{Behaviour, Peer, PeerIndex, ProtocolId, ServiceControl};
-use ckb_app_config::{NetworkConfig};
+use ckb_app_config::NetworkConfig;
 use ckb_logger::{debug, error, info, trace, warn};
 
-
 use ckb_util::{Condvar, Mutex, RwLock};
-use futures::{channel::mpsc::Sender};
+use futures::channel::mpsc::Sender;
 use ipnetwork::IpNetwork;
 use p2p::{
     bytes::Bytes,
-    context::{SessionContext},
-    error::{SendErrorKind},
+    context::SessionContext,
+    error::SendErrorKind,
     multiaddr::{Multiaddr, Protocol},
     secio::{self, PeerId},
-    service::{
-        ServiceAsyncControl, TargetProtocol,
-        TargetSession,
-    },
+    service::{ServiceAsyncControl, TargetProtocol, TargetSession},
     utils::{extract_peer_id, is_reachable, multiaddr_to_socketaddr},
     SessionId,
 };
@@ -49,7 +42,6 @@ use std::{
     time::{Duration, Instant},
     usize,
 };
-
 
 const P2P_SEND_TIMEOUT: Duration = Duration::from_secs(6);
 const P2P_TRY_SEND_INTERVAL: Duration = Duration::from_millis(100);

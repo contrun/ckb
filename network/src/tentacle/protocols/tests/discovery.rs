@@ -1,4 +1,4 @@
-use crate::protocols::{
+use crate::tentacle::protocols::{
     discovery::protocol::{decode, encode, DiscoveryMessage},
     identify::Flags,
 };

@@ -15,10 +15,9 @@ mod network_group;
 mod peer;
 pub mod peer_registry;
 pub mod peer_store;
-mod protocols;
 mod services;
+pub mod tentacle;
 
-mod tentacle;
 #[cfg(test)]
 mod tests;
 
@@ -32,7 +31,7 @@ pub use crate::{
     peer::{Peer, PeerIdentifyInfo},
     peer_registry::PeerRegistry,
     peer_store::Score,
-    protocols::{
+    tentacle::protocols::{
         identify::Flags, support_protocols::SupportProtocols, CKBProtocol, CKBProtocolContext,
         CKBProtocolHandler, PeerIndex,
     },

@@ -290,7 +290,7 @@ impl ServiceProtocol for CKBHandler {
             .network_state
             .ckb2023
             .load(std::sync::atomic::Ordering::SeqCst)
-            && version != crate::protocols::support_protocols::LASTEST_VERSION
+            && version != crate::tentacle::protocols::support_protocols::LASTEST_VERSION
             && context.proto_id != SupportProtocols::RelayV2.protocol_id()
         {
             debug!(

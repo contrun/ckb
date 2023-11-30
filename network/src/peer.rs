@@ -1,6 +1,7 @@
 use crate::network_group::Group;
 use crate::{
-    multiaddr::Multiaddr, protocols::identify::Flags, ProtocolId, ProtocolVersion, SessionType,
+    multiaddr::Multiaddr, tentacle::protocols::identify::Flags, ProtocolId, ProtocolVersion,
+    SessionType,
 };
 use p2p::SessionId;
 use std::collections::HashMap;
