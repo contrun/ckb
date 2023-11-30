@@ -4190,6 +4190,10 @@ Response
     "low_time": "0x5dc",
     "normal_time": "0x4e2",
     "orphan_blocks_count": "0x0"
+    "tip_hash": String("0xa5f5c85987a15de25661e5a214f2c1449cd803f071acc7999820f25246471f40"),
+    "tip_number": String("0x400"),
+    "unverified_tip_hash": String("0xa5f5c85987a15de25661e5a214f2c1449cd803f071acc7999820f25246471f40"),
+    "unverified_tip_number": String("0x400"),
   }
 }
 ```
@@ -6905,6 +6909,14 @@ The overall chain synchronization state of this local node.
     If this number is too high, it indicates that block download has stuck at some block.
 
 *   `inflight_blocks_count`: [`Uint64`](#type-uint64) - Count of downloading blocks.
+
+*   `unverified_tip_number`: [`BlockNumber`](#type-blocknumber) - The block number of current unverified tip block
+
+*   `unverified_tip_hash`: [`H256`](#type-h256) - The block hash of current unverified tip block
+
+*   `tip_number`: [`BlockNumber`](#type-blocknumber) - The block number of current tip block
+
+*   `tip_hash`: [`H256`](#type-h256) - The block hash of current tip block
 
 *   `fast_time`: [`Uint64`](#type-uint64) - The download scheduler’s time analysis data, the fast is the 1/3 of the cut-off point, unit ms
 
