@@ -13,6 +13,7 @@ use ckb_channel::Receiver;
 use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
+use ckb_network::libp2p::NetworkController as Libp2pNetworkController;
 use ckb_network::{
     observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
     SupportProtocols, TentacleNetworkService,
@@ -361,6 +362,13 @@ impl Launcher {
 
         let required_protocol_ids = vec![SupportProtocols::Sync.protocol_id()];
 
+        let libp2p_network_controller = Libp2pNetworkController::new(
+            shared.consensus().identify_name(),
+            self.version.to_string(),
+            Arc::clone(&network_state),
+            protocols.iter().map(|p| p.id().into()).collect(),
+            required_protocol_ids.iter().map(|p| (*p).into()).collect(),
+        );
         let tentacle_network_controller = TentacleNetworkService::new(
             Arc::clone(&network_state),
             protocols,
@@ -373,7 +381,10 @@ impl Launcher {
         )
         .start(shared.async_handle())
         .expect("Start network service failed");
-        let network_controller = NetworkController::new(tentacle_network_controller);
+        let network_controller = NetworkController::new(
+            Some(tentacle_network_controller),
+            Some(libp2p_network_controller),
+        );
 
         let rpc_config = self.adjust_rpc_config();
         let builder = ServiceBuilder::new(&rpc_config)

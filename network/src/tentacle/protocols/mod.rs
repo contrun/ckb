@@ -166,7 +166,7 @@ pub trait CKBProtocolHandler: Sync + Send {
 
 /// Help to build protocol meta
 pub struct CKBProtocol {
-    id: ProtocolId,
+    protocol: SupportProtocols,
     // for example: b"/ckb/"
     protocol_name: String,
     // supported version, used to check protocol version
@@ -185,9 +185,9 @@ impl CKBProtocol {
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
-            id: support_protocol.protocol_id(),
-            max_frame_length: support_protocol.max_frame_length(),
+            protocol: support_protocol,
             protocol_name: support_protocol.name(),
+            max_frame_length: support_protocol.max_frame_length(),
             supported_versions: support_protocol.support_versions(),
             network_state,
             handler,
@@ -204,7 +204,7 @@ impl CKBProtocol {
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
-            id,
+            protocol: id.into(),
             max_frame_length,
             network_state,
             handler,
@@ -219,7 +219,7 @@ impl CKBProtocol {
 
     /// Protocol id
     pub fn id(&self) -> ProtocolId {
-        self.id
+        self.protocol.protocol_id()
     }
 
     /// Protocol name
@@ -242,7 +242,7 @@ impl CKBProtocol {
             .map(ToString::to_string)
             .collect::<Vec<_>>();
         MetaBuilder::default()
-            .id(self.id)
+            .id(self.id())
             .name(move |_| protocol_name.clone())
             .codec(move || {
                 Box::new(
@@ -254,7 +254,7 @@ impl CKBProtocol {
             .support_versions(supported_versions)
             .service_handle(move || {
                 ProtocolHandle::Callback(Box::new(CKBHandler {
-                    proto_id: self.id,
+                    proto_id: self.id(),
                     network_state: Arc::clone(&self.network_state),
                     handler: self.handler,
                 }))

@@ -5,6 +5,7 @@ pub use super::tentacle::EventHandler as TentacleEventHandler;
 pub use super::tentacle::NetworkService as TentacleNetworkService;
 
 use crate::errors::Error;
+use crate::libp2p;
 use crate::peer_registry::{ConnectionStatus, PeerRegistry};
 use crate::peer_store::{
     types::{AddrInfo, BannedAddr},
@@ -505,17 +506,19 @@ impl ExitHandler for DefaultExitHandler {
 #[derive(Clone)]
 pub struct NetworkController {
     pub(crate) tentacle: Option<tentacle::NetworkController>,
+    pub(crate) libp2p: Option<libp2p::NetworkController>,
 }
 
 impl NetworkController {
-    pub fn new(tentacle: tentacle::NetworkController) -> Self {
-        Self {
-            tentacle: Some(tentacle),
-        }
+    pub fn new(
+        tentacle: Option<tentacle::NetworkController>,
+        libp2p: Option<libp2p::NetworkController>,
+    ) -> Self {
+        Self { tentacle, libp2p }
     }
 
     pub fn tentacle(&self) -> &tentacle::NetworkController {
-        self.tentacle.as_ref().unwrap()
+        self.tentacle.as_ref().expect("Tentacle controller exists")
     }
 
     /// Set ckb2023 start

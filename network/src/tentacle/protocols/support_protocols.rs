@@ -16,7 +16,7 @@ pub const LASTEST_VERSION: &str = "3";
 /// you only need to implement a few core protocols.
 ///
 /// Core protocol: identify/discovery/sync/relay
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum SupportProtocols {
     /// Ping: as a health check for ping/pong
     Ping,
@@ -61,21 +61,7 @@ pub enum SupportProtocols {
 impl SupportProtocols {
     /// Protocol id
     pub fn protocol_id(&self) -> ProtocolId {
-        match self {
-            SupportProtocols::Ping => 0,
-            SupportProtocols::Discovery => 1,
-            SupportProtocols::Identify => 2,
-            SupportProtocols::Feeler => 3,
-            SupportProtocols::DisconnectMessage => 4,
-            SupportProtocols::Sync => 100,
-            SupportProtocols::RelayV2 => 101,
-            SupportProtocols::RelayV3 => 103,
-            SupportProtocols::Time => 102,
-            SupportProtocols::Alert => 110,
-            SupportProtocols::LightClient => 120,
-            SupportProtocols::Filter => 121,
-        }
-        .into()
+        (*self).into()
     }
 
     /// Protocol name
@@ -147,6 +133,46 @@ impl SupportProtocols {
     ) -> ProtocolMeta {
         let meta_builder: MetaBuilder = self.into();
         meta_builder.service_handle(service_handle).build()
+    }
+}
+
+impl From<SupportProtocols> for ProtocolId {
+    fn from(protocol: SupportProtocols) -> ProtocolId {
+        match protocol {
+            SupportProtocols::Ping => 0,
+            SupportProtocols::Discovery => 1,
+            SupportProtocols::Identify => 2,
+            SupportProtocols::Feeler => 3,
+            SupportProtocols::DisconnectMessage => 4,
+            SupportProtocols::Sync => 100,
+            SupportProtocols::RelayV2 => 101,
+            SupportProtocols::RelayV3 => 103,
+            SupportProtocols::Time => 102,
+            SupportProtocols::Alert => 110,
+            SupportProtocols::LightClient => 120,
+            SupportProtocols::Filter => 121,
+        }
+        .into()
+    }
+}
+
+impl From<ProtocolId> for SupportProtocols {
+    fn from(id: ProtocolId) -> SupportProtocols {
+        match id.value() {
+            0 => SupportProtocols::Ping,
+            1 => SupportProtocols::Discovery,
+            2 => SupportProtocols::Identify,
+            3 => SupportProtocols::Feeler,
+            4 => SupportProtocols::DisconnectMessage,
+            100 => SupportProtocols::Sync,
+            101 => SupportProtocols::RelayV2,
+            103 => SupportProtocols::RelayV3,
+            102 => SupportProtocols::Time,
+            110 => SupportProtocols::Alert,
+            120 => SupportProtocols::LightClient,
+            121 => SupportProtocols::Filter,
+            _ => panic!("Invalid protocol id {}", id),
+        }
     }
 }
 
