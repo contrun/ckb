@@ -6,7 +6,6 @@ use crate::services::{
     dump_peer_store::DumpPeerStoreService, outbound_peer::OutboundPeerService,
     protocol_type_checker::ProtocolTypeCheckerService,
 };
-use crate::NetworkController;
 use crate::NetworkState;
 use protocols::{
     disconnect_message::DisconnectMessageProtocol,
@@ -290,6 +289,15 @@ impl ServiceHandle for EventHandler {
             }
         }
     }
+}
+
+/// Network controller
+#[derive(Clone)]
+pub struct NetworkController {
+    pub(crate) version: String,
+    pub(crate) network_state: Arc<NetworkState>,
+    pub(crate) p2p_control: ServiceControl,
+    pub(crate) ping_controller: Option<Sender<()>>,
 }
 
 /// Ckb network service, use to start p2p network
@@ -682,7 +690,7 @@ impl NetworkService {
 
         for addr in nodes_to_dial {
             debug!("dial node {:?}", addr);
-            nc.dial_node(addr);
+            nc.network_state.dial_identify(&nc.p2p_control, addr);
         }
         Ok(nc)
     }

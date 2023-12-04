@@ -10,6 +10,7 @@ use crate::peer_store::{
     types::{AddrInfo, BannedAddr},
     PeerStore,
 };
+use crate::tentacle;
 use crate::tentacle::protocols::{identify::Flags, support_protocols::SupportProtocols};
 
 use crate::{Behaviour, Peer, PeerIndex, ProtocolId, ServiceControl};
@@ -17,7 +18,6 @@ use ckb_app_config::NetworkConfig;
 use ckb_logger::{debug, error, info, trace, warn};
 
 use ckb_util::{Condvar, Mutex, RwLock};
-use futures::channel::mpsc::Sender;
 use ipnetwork::IpNetwork;
 use p2p::{
     bytes::Bytes,
@@ -504,62 +504,77 @@ impl ExitHandler for DefaultExitHandler {
 /// Network controller
 #[derive(Clone)]
 pub struct NetworkController {
-    pub(crate) version: String,
-    pub(crate) network_state: Arc<NetworkState>,
-    pub(crate) p2p_control: ServiceControl,
-    pub(crate) ping_controller: Option<Sender<()>>,
+    pub(crate) tentacle: Option<tentacle::NetworkController>,
 }
 
 impl NetworkController {
+    pub fn new(tentacle: tentacle::NetworkController) -> Self {
+        Self {
+            tentacle: Some(tentacle),
+        }
+    }
+
+    pub fn tentacle(&self) -> &tentacle::NetworkController {
+        self.tentacle.as_ref().unwrap()
+    }
+
     /// Set ckb2023 start
     pub fn init_ckb2023(&self) {
-        self.network_state.ckb2023.store(true, Ordering::SeqCst);
+        self.tentacle()
+            .network_state
+            .ckb2023
+            .store(true, Ordering::SeqCst);
     }
 
     /// Get ckb2023 flag
     pub fn load_ckb2023(&self) -> bool {
-        self.network_state.ckb2023.load(Ordering::SeqCst)
+        self.tentacle().network_state.ckb2023.load(Ordering::SeqCst)
     }
 
     /// Node listen address list
     pub fn public_urls(&self, max_urls: usize) -> Vec<(String, u8)> {
-        self.network_state.public_urls(max_urls)
+        self.tentacle().network_state.public_urls(max_urls)
     }
 
     /// ckb version
     pub fn version(&self) -> &String {
-        &self.version
+        &self.tentacle().version
     }
 
     /// Node peer id's base58 format string
     pub fn node_id(&self) -> String {
-        self.network_state.node_id()
+        self.tentacle().network_state.node_id()
     }
 
     /// p2p service control
     pub fn p2p_control(&self) -> &ServiceControl {
-        &self.p2p_control
+        &self.tentacle().p2p_control
     }
 
     pub fn dial_node(&self, addr: Multiaddr) {
-        self.network_state.dial_identify(&self.p2p_control, addr);
+        self.tentacle()
+            .network_state
+            .dial_identify(self.p2p_control(), addr);
     }
 
     /// Dial remote node
     pub fn add_node(&self, address: Multiaddr) {
-        self.network_state.add_node(&self.p2p_control, address)
+        self.tentacle()
+            .network_state
+            .add_node(self.p2p_control(), address)
     }
 
     /// Disconnect session with peer id
     pub fn remove_node(&self, peer_id: &PeerId) {
         if let Some(session_id) = self
+            .tentacle()
             .network_state
             .peer_registry
             .read()
             .get_key_by_peer_id(peer_id)
         {
             if let Err(err) = tentacle_disconnect_with_message(
-                &self.p2p_control,
+                self.p2p_control(),
                 session_id,
                 "disconnect manually",
             ) {
@@ -572,7 +587,8 @@ impl NetworkController {
 
     /// Get banned peer list
     pub fn get_banned_addrs(&self) -> Vec<BannedAddr> {
-        self.network_state
+        self.tentacle()
+            .network_state
             .peer_store
             .lock()
             .ban_list()
@@ -581,12 +597,17 @@ impl NetworkController {
 
     /// Clear banned list
     pub fn clear_banned_addrs(&self) {
-        self.network_state.peer_store.lock().clear_ban_list();
+        self.tentacle()
+            .network_state
+            .peer_store
+            .lock()
+            .clear_ban_list();
     }
 
     /// Get address info from peer store
     pub fn addr_info(&self, addr: &Multiaddr) -> Option<AddrInfo> {
-        self.network_state
+        self.tentacle()
+            .network_state
             .peer_store
             .lock()
             .addr_manager()
@@ -597,7 +618,8 @@ impl NetworkController {
     /// Ban an ip
     pub fn ban(&self, address: IpNetwork, ban_until: u64, ban_reason: String) {
         self.disconnect_peers_in_ip_range(address, &ban_reason);
-        self.network_state
+        self.tentacle()
+            .network_state
             .peer_store
             .lock()
             .ban_network(address, ban_until, ban_reason)
@@ -605,7 +627,8 @@ impl NetworkController {
 
     /// Unban an ip
     pub fn unban(&self, address: &IpNetwork) {
-        self.network_state
+        self.tentacle()
+            .network_state
             .peer_store
             .lock()
             .mut_ban_list()
@@ -614,7 +637,7 @@ impl NetworkController {
 
     /// Return all connected peers' information
     pub fn connected_peers(&self) -> Vec<(PeerIndex, Peer)> {
-        self.network_state.with_peer_registry(|reg| {
+        self.tentacle().network_state.with_peer_registry(|reg| {
             reg.peers()
                 .iter()
                 .map(|(peer_index, peer)| (*peer_index, peer.clone()))
@@ -624,18 +647,19 @@ impl NetworkController {
 
     /// Ban an peer through peer index
     pub fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
-        self.network_state
-            .ban_session(&self.p2p_control, peer_index, duration, reason);
+        self.tentacle()
+            .network_state
+            .ban_session(self.p2p_control(), peer_index, duration, reason);
     }
 
     /// disconnect peers with matched peer_ip or peer_ip_network, eg: 192.168.0.2 or 192.168.0.0/24
     fn disconnect_peers_in_ip_range(&self, address: IpNetwork, reason: &str) {
-        self.network_state.with_peer_registry(|reg| {
+        self.tentacle().network_state.with_peer_registry(|reg| {
             reg.peers().iter().for_each(|(peer_index, peer)| {
                 if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
                     if address.contains(addr.ip()) {
                         let _ = tentacle_disconnect_with_message(
-                            &self.p2p_control,
+                            self.p2p_control(),
                             *peer_index,
                             &format!("Ban peer {}, reason: {}", addr.ip(), reason),
                         );
@@ -658,10 +682,10 @@ impl NetworkController {
                 .map(TargetSession::Single)
                 .unwrap_or(TargetSession::All);
             let result = if quick {
-                self.p2p_control
+                self.p2p_control()
                     .quick_filter_broadcast(target, proto_id, data.clone())
             } else {
-                self.p2p_control
+                self.p2p_control()
                     .filter_broadcast(target, proto_id, data.clone())
             };
             match result {
@@ -705,22 +729,25 @@ impl NetworkController {
 
     /// network message processing controller, always true, if false, discard any received messages
     pub fn is_active(&self) -> bool {
-        self.network_state.is_active()
+        self.tentacle().network_state.is_active()
     }
 
     /// Change active status, if set false discard any received messages
     pub fn set_active(&self, active: bool) {
-        self.network_state.active.store(active, Ordering::Relaxed);
+        self.tentacle()
+            .network_state
+            .active
+            .store(active, Ordering::Relaxed);
     }
 
     /// Return all connected peers' protocols info
     pub fn protocols(&self) -> Vec<(ProtocolId, String, Vec<String>)> {
-        self.network_state.protocols.read().clone()
+        self.tentacle().network_state.protocols.read().clone()
     }
 
     /// Try ping all connected peers
     pub fn ping_peers(&self) {
-        if let Some(mut ping_controller) = self.ping_controller.clone() {
+        if let Some(mut ping_controller) = self.tentacle().ping_controller.clone() {
             let _ignore = ping_controller.try_send(());
         }
     }

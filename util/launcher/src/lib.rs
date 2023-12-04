@@ -361,7 +361,7 @@ impl Launcher {
 
         let required_protocol_ids = vec![SupportProtocols::Sync.protocol_id()];
 
-        let network_controller = TentacleNetworkService::new(
+        let tentacle_network_controller = TentacleNetworkService::new(
             Arc::clone(&network_state),
             protocols,
             required_protocol_ids,
@@ -373,6 +373,7 @@ impl Launcher {
         )
         .start(shared.async_handle())
         .expect("Start network service failed");
+        let network_controller = NetworkController::new(tentacle_network_controller);
 
         let rpc_config = self.adjust_rpc_config();
         let builder = ServiceBuilder::new(&rpc_config)

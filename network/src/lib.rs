@@ -10,6 +10,7 @@ mod behaviour;
 /// compress module
 pub mod compress;
 pub mod errors;
+// pub mod libp2p;
 pub mod network;
 mod network_group;
 mod peer;
