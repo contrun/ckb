@@ -1,12 +1,12 @@
 use crate::NetworkState;
 
-use crate::errors::{Error, P2PError};
+use crate::errors::Error;
 use crate::SupportProtocols;
 
-use ckb_logger::{debug, info, trace, warn};
+use ckb_async_runtime::Handle;
+use ckb_logger::{debug, error, info, trace};
 
 use core::time::Duration;
-use libp2p::Multiaddr;
 use libp2p::{
     identify, noise, ping, swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, Swarm,
 };
@@ -17,6 +17,8 @@ use tokio::sync::mpsc;
 use futures::StreamExt;
 use std::sync::Arc;
 
+pub use libp2p::Multiaddr;
+
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     identify: identify::Behaviour,
@@ -25,17 +27,10 @@ struct MyBehaviour {
 
 #[derive(Debug, Clone)]
 pub enum Command {
-    Ping { multiaddr: Multiaddr },
+    Dial { multiaddr: Multiaddr },
 }
 
 pub enum Event {}
-
-#[derive(Clone)]
-pub struct NetworkController {
-    network_state: Arc<NetworkState>,
-    command_sender: mpsc::Sender<Command>,
-    // event_reciever: mpsc::Receiver<Event>,
-}
 
 pub struct NetworkService {
     swarm: Swarm<MyBehaviour>,
@@ -47,8 +42,8 @@ impl NetworkService {
         loop {
             tokio::select! {
                 event = self.swarm.next() => {
-                    trace!("{:?}", &event);
-                    self.handle_event(event.expect("Swarm stream to be infinite."));
+                    info!("{:?}", &event);
+                    self.handle_event(event.expect("Swarm stream to be infinite.")).await;
                 },
                 command = self.command_receiver.recv() => {
                     trace!("{:?}", &command);
@@ -86,16 +81,28 @@ impl NetworkService {
 
     async fn handle_command(&mut self, command: Command) {
         match command {
-            Command::Ping { multiaddr } => {
-                let ping = &self.swarm.behaviour_mut().ping;
+            Command::Dial { multiaddr } => {
+                if let Err(error) = self.swarm.dial(multiaddr.clone()) {
+                    error!("Dialing libp2p peer {} failed: {}", multiaddr, error);
+                } else {
+                    info!("Dialing libp2p peer {} succeeded", multiaddr);
+                }
             }
         }
     }
 }
 
+#[derive(Clone)]
+pub struct NetworkController {
+    pub(crate) handle: Handle,
+    pub(crate) network_state: Arc<NetworkState>,
+    pub(crate) command_sender: mpsc::Sender<Command>,
+    // event_reciever: mpsc::Receiver<Event>,
+}
+
 impl NetworkController {
-    pub fn new<S: Spawn>(
-        handle: &S,
+    pub fn new(
+        handle: &Handle,
         network_identification: String,
         client_version: String,
         network_state: Arc<NetworkState>,
@@ -113,7 +120,7 @@ impl NetworkController {
         let keypair = libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes)
             .expect("Valid ed25519 key");
 
-        let mut swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
+        let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
                 tcp::Config::default(),
@@ -146,6 +153,8 @@ impl NetworkController {
 
         handle.spawn_task(async move {
             let addr = format!("/ip4/0.0.0.0/tcp/{}", libp2p_port);
+            // Note that although listen_on is not an async function,
+            // it actually requires a runtime, so we must call it within a handle.spawn_task.
             let result = service
                 .swarm
                 .listen_on(addr.parse().expect("Correct multiaddr"));
@@ -158,6 +167,7 @@ impl NetworkController {
             service.run().await;
         });
         Ok(NetworkController {
+            handle: handle.clone(),
             network_state,
             command_sender,
         })

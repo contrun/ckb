@@ -18,6 +18,7 @@ use crate::{Behaviour, Peer, PeerIndex, ProtocolId, ServiceControl};
 use ckb_app_config::NetworkConfig;
 use ckb_logger::{debug, error, info, trace, warn};
 
+use ckb_spawn::Spawn;
 use ckb_util::{Condvar, Mutex, RwLock};
 use ipnetwork::IpNetwork;
 use p2p::{
@@ -517,6 +518,10 @@ impl NetworkController {
         Self { tentacle, libp2p }
     }
 
+    pub fn libp2p(&self) -> &libp2p::NetworkController {
+        self.libp2p.as_ref().expect("Tentacle controller exists")
+    }
+
     pub fn tentacle(&self) -> &tentacle::NetworkController {
         self.tentacle.as_ref().expect("Tentacle controller exists")
     }
@@ -527,6 +532,21 @@ impl NetworkController {
             .network_state
             .ckb2023
             .store(true, Ordering::SeqCst);
+    }
+
+    pub fn dial_libp2p_peer(&self, multiaddr: libp2p::Multiaddr) {
+        let libp2p = self.libp2p();
+
+        let handle = &libp2p.handle;
+        let command_sender = libp2p.command_sender.clone();
+        info!("Dialing {}", &multiaddr);
+        handle.spawn_task(async move {
+            let _ = command_sender
+                .send(libp2p::Command::Dial {
+                    multiaddr: multiaddr,
+                })
+                .await;
+        });
     }
 
     /// Get ckb2023 flag
