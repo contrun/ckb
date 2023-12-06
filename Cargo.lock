@@ -1259,6 +1259,7 @@ dependencies = [
  "bloom-filters",
  "bs58 0.4.0",
  "ckb-app-config",
+ "ckb-async-runtime",
  "ckb-hash",
  "ckb-logger",
  "ckb-metrics",

@@ -529,6 +529,33 @@ pub trait NetRpc {
     /// ```
     #[rpc(name = "ping_peers")]
     fn ping_peers(&self) -> Result<()>;
+
+    /// Dial a libp2p peer.
+    ///
+    /// ## Examples
+    ///
+    /// Requests
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "method": "dial_libp2p_peer",
+    ///   "params": ["/ip4/127.0.0.1/tcp/12345/p2p/12D3KooWFqy3UUUYE5YYY4xaWnHpLaBzGa6KCvmWeTD2rvgXM4NV"]
+    /// }
+    /// ```
+    ///
+    /// Response
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "result": null
+    /// }
+    /// ```
+    #[rpc(name = "dial_libp2p_peer")]
+    fn dial_libp2p_peer(&self, addr: String) -> Result<()>;
 }
 
 pub(crate) struct NetRpcImpl {
@@ -754,6 +781,13 @@ impl NetRpc for NetRpcImpl {
 
     fn ping_peers(&self) -> Result<()> {
         self.network_controller.ping_peers();
+        Ok(())
+    }
+
+    fn dial_libp2p_peer(&self, addr: String) -> Result<()> {
+        if let Ok(multiaddr) = addr.parse() {
+            self.network_controller.dial_libp2p_peer(multiaddr)
+        }
         Ok(())
     }
 }
