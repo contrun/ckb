@@ -198,7 +198,7 @@ pub(crate) fn write_secret_to_file(secret: &[u8], path: PathBuf) -> Result<(), E
         })
 }
 
-pub(crate) fn read_secret_key(path: PathBuf) -> Result<Option<secio::SecioKeyPair>, Error> {
+pub(crate) fn read_secret_key_bytes(path: PathBuf) -> Result<Option<Vec<u8>>, Error> {
     let mut file = match fs::File::open(path.clone()) {
         Ok(file) => file,
         Err(_) => return Ok(None),
@@ -226,11 +226,17 @@ pub(crate) fn read_secret_key(path: PathBuf) -> Result<Option<secio::SecioKeyPai
         warn(!file.metadata()?.permissions().readonly(), "readonly");
     }
     let mut buf = Vec::new();
-    file.read_to_end(&mut buf).and_then(|_read_size| {
+    file.read_to_end(&mut buf)?;
+    Ok(Some(buf))
+}
+
+pub(crate) fn read_secret_key(path: PathBuf) -> Result<Option<secio::SecioKeyPair>, Error> {
+    let buf = read_secret_key_bytes(path)?;
+    buf.map(|buf| {
         secio::SecioKeyPair::secp256k1_raw_key(&buf)
-            .map(Some)
             .map_err(|_| Error::new(ErrorKind::InvalidData, "invalid secret key data"))
     })
+    .transpose()
 }
 
 impl Config {
@@ -285,6 +291,14 @@ impl Config {
         read_secret_key(path)
     }
 
+    /// Reads the bytes of the secret key from secret key file.
+    ///
+    /// If the key file does not exists, it returns `Ok(None)`.
+    fn read_secret_key_bytes(&self) -> Result<Option<Vec<u8>>, Error> {
+        let path = self.secret_key_path();
+        read_secret_key_bytes(path)
+    }
+
     /// Generates a random secret key and saves it into the file.
     fn write_secret_key_to_file(&self) -> Result<(), Error> {
         let path = self.secret_key_path();
@@ -299,6 +313,17 @@ impl Config {
             None => {
                 self.write_secret_key_to_file()?;
                 Ok(self.read_secret_key()?.expect("key must exists"))
+            }
+        }
+    }
+
+    /// Reads the private key bytes from file or generates one if the file does not exist.
+    pub fn fetch_private_key_bytes(&self) -> Result<Vec<u8>, Error> {
+        match self.read_secret_key_bytes()? {
+            Some(key) => Ok(key),
+            None => {
+                self.write_secret_key_to_file()?;
+                Ok(self.read_secret_key_bytes()?.expect("key must exists"))
             }
         }
     }

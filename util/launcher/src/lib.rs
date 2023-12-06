@@ -363,12 +363,14 @@ impl Launcher {
         let required_protocol_ids = vec![SupportProtocols::Sync.protocol_id()];
 
         let libp2p_network_controller = Libp2pNetworkController::new(
+            shared.async_handle(),
             shared.consensus().identify_name(),
             self.version.to_string(),
             Arc::clone(&network_state),
             protocols.iter().map(|p| p.id().into()).collect(),
             required_protocol_ids.iter().map(|p| (*p).into()).collect(),
-        );
+        )
+        .expect("Start libp2p service failed");
         let tentacle_network_controller = TentacleNetworkService::new(
             Arc::clone(&network_state),
             protocols,
