@@ -367,7 +367,7 @@ impl Launcher {
             shared.consensus().identify_name(),
             self.version.to_string(),
             Arc::clone(&network_state),
-            protocols.iter().map(|p| p.id().into()).collect(),
+            protocols.clone(),
             required_protocol_ids.iter().map(|p| (*p).into()).collect(),
         )
         .expect("Start libp2p service failed");
