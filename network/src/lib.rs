@@ -17,6 +17,7 @@ mod peer;
 pub mod peer_registry;
 pub mod peer_store;
 mod services;
+mod support_protocols;
 pub mod tentacle;
 
 #[cfg(test)]
@@ -32,9 +33,9 @@ pub use crate::{
     peer::{Peer, PeerIdentifyInfo},
     peer_registry::PeerRegistry,
     peer_store::Score,
+    support_protocols::SupportProtocols,
     tentacle::protocols::{
-        identify::Flags, support_protocols::SupportProtocols, CKBProtocol, CKBProtocolContext,
-        CKBProtocolHandler, PeerIndex,
+        identify::Flags, CKBProtocol, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
     },
 };
 pub use p2p::{

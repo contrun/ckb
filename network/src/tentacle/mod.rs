@@ -7,13 +7,13 @@ use crate::services::{
     protocol_type_checker::ProtocolTypeCheckerService,
 };
 use crate::NetworkState;
+use crate::SupportProtocols;
 use protocols::{
     disconnect_message::DisconnectMessageProtocol,
     discovery::{DiscoveryAddressManager, DiscoveryProtocol},
     feeler::Feeler,
     identify::{Flags, IdentifyCallback, IdentifyProtocol},
     ping::PingHandler,
-    support_protocols::SupportProtocols,
 };
 
 use crate::{CKBProtocol, PeerIndex, ProtocolId, ServiceControl};

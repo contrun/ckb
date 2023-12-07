@@ -3,7 +3,6 @@ pub(crate) mod discovery;
 pub(crate) mod feeler;
 pub(crate) mod identify;
 pub(crate) mod ping;
-pub(crate) mod support_protocols;
 
 #[cfg(test)]
 mod tests;
@@ -180,7 +179,7 @@ impl CKBProtocol {
     /// New with support protocol
     // a helper constructor to build `CKBProtocol` with `SupportProtocols` enum
     pub fn new_with_support_protocol(
-        support_protocol: support_protocols::SupportProtocols,
+        support_protocol: SupportProtocols,
         handler: Box<dyn CKBProtocolHandler>,
         network_state: Arc<NetworkState>,
     ) -> Self {
@@ -290,7 +289,7 @@ impl ServiceProtocol for CKBHandler {
             .network_state
             .ckb2023
             .load(std::sync::atomic::Ordering::SeqCst)
-            && version != crate::tentacle::protocols::support_protocols::LASTEST_VERSION
+            && version != crate::support_protocols::LASTEST_VERSION
             && context.proto_id != SupportProtocols::RelayV2.protocol_id()
         {
             debug!(

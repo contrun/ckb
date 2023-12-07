@@ -12,7 +12,8 @@ use crate::peer_store::{
     PeerStore,
 };
 use crate::tentacle;
-use crate::tentacle::protocols::{identify::Flags, support_protocols::SupportProtocols};
+use crate::tentacle::protocols::identify::Flags;
+use crate::SupportProtocols;
 
 use crate::{Behaviour, Peer, PeerIndex, ProtocolId, ServiceControl};
 use ckb_app_config::NetworkConfig;
