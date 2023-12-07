@@ -556,6 +556,33 @@ pub trait NetRpc {
     /// ```
     #[rpc(name = "dial_libp2p_peer")]
     fn dial_libp2p_peer(&self, addr: String) -> Result<()>;
+
+    /// Disconnect a libp2p peer.
+    ///
+    /// ## Examples
+    ///
+    /// Requests
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "method": "dial_libp2p_peer",
+    ///   "params": ["12D3KooWFqy3UUUYE5YYY4xaWnHpLaBzGa6KCvmWeTD2rvgXM4NV", "Good bye"]
+    /// }
+    /// ```
+    ///
+    /// Response
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "result": null
+    /// }
+    /// ```
+    #[rpc(name = "disconnect_libp2p_peer")]
+    fn dial_disconnect_peer(&self, peer: String, message: String) -> Result<()>;
 }
 
 pub(crate) struct NetRpcImpl {
@@ -787,6 +814,14 @@ impl NetRpc for NetRpcImpl {
     fn dial_libp2p_peer(&self, addr: String) -> Result<()> {
         if let Ok(multiaddr) = addr.parse() {
             self.network_controller.dial_libp2p_peer(multiaddr)
+        }
+        Ok(())
+    }
+
+    fn dial_disconnect_peer(&self, peer: String, message: String) -> Result<()> {
+        if let Ok(peer) = peer.parse() {
+            self.network_controller
+                .disconnect_libp2p_peer(peer, message)
         }
         Ok(())
     }

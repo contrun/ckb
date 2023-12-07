@@ -1,4 +1,5 @@
-use crate::NetworkState;
+
+use crate::{NetworkState};
 
 use crate::errors::Error;
 use crate::SupportProtocols;
@@ -6,10 +7,18 @@ use crate::SupportProtocols;
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace};
 
+
 use core::time::Duration;
 use libp2p::{
-    identify, noise, ping, swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, Swarm,
+    identify, noise, ping,
+    request_response::{self, ProtocolSupport},
+    swarm::behaviour::toggle::Toggle,
+    swarm::NetworkBehaviour,
+    swarm::SwarmEvent,
+    tcp, yamux, StreamProtocol, Swarm,
 };
+
+use serde::{Deserialize, Serialize};
 
 use ckb_spawn::Spawn;
 use tokio::sync::mpsc;
@@ -18,16 +27,26 @@ use futures::StreamExt;
 use std::sync::Arc;
 
 pub use libp2p::Multiaddr;
+pub use libp2p::PeerId;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct DisconnectMessageRequest(String);
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct DisconnectMessageResponse(String);
 
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     identify: identify::Behaviour,
     ping: ping::Behaviour,
+    disconnect_message: Toggle<
+        request_response::cbor::Behaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
+    >,
 }
 
 #[derive(Debug, Clone)]
 pub enum Command {
     Dial { multiaddr: Multiaddr },
+    Disconnect { peer: PeerId, message: String },
 }
 
 pub enum Event {}
@@ -73,6 +92,50 @@ impl NetworkService {
             SwarmEvent::Behaviour(MyBehaviourEvent::Identify(event)) => {
                 info!("Identify event {:?}", event);
             }
+            SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
+                request_response::Event::Message { message, peer },
+            )) => match message {
+                request_response::Message::Request {
+                    request, channel, ..
+                } => {
+                    info!(
+                        "Sending disconnect message request ({:?}) from channel {:?}",
+                        request, channel
+                    );
+
+                    let disconnect_message = &mut self.swarm.behaviour_mut().disconnect_message;
+                    if !disconnect_message.is_enabled() {
+                        return;
+                    }
+                    let disconnect_message = disconnect_message.as_mut().unwrap();
+
+                    let _ = disconnect_message
+                        .send_response(channel, DisconnectMessageResponse("Ok, bye".to_string()));
+                    let _ = self.swarm.disconnect_peer_id(peer);
+                }
+                request_response::Message::Response {
+                    request_id,
+                    response,
+                } => {
+                    info!(
+                        "Received disconnect message response ({:?}) for request_id {:?}",
+                        response, request_id,
+                    );
+                }
+            },
+            SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
+                request_response::Event::OutboundFailure {
+                    request_id, error, ..
+                },
+            )) => {
+                info!(
+                    "Outbound connection for request_id {} failed: {}",
+                    request_id, error
+                );
+            }
+            SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
+                request_response::Event::ResponseSent { .. },
+            )) => {}
             other => {
                 debug!("Unhandled {:?}", other);
             }
@@ -87,6 +150,20 @@ impl NetworkService {
                 } else {
                     info!("Dialing libp2p peer {} succeeded", multiaddr);
                 }
+            }
+            Command::Disconnect { peer, message } => {
+                let disconnect_message = &mut self.swarm.behaviour_mut().disconnect_message;
+                if !disconnect_message.is_enabled() {
+                    return;
+                }
+                let disconnect_message = disconnect_message.as_mut().unwrap();
+
+                let request_id =
+                    &disconnect_message.send_request(&peer, DisconnectMessageRequest(message));
+                info!(
+                    "Disconnect message send to {}, request_id {:?}",
+                    peer, request_id
+                );
             }
         }
     }
@@ -120,6 +197,21 @@ impl NetworkController {
         let keypair = libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes)
             .expect("Valid ed25519 key");
 
+        // TODO: Set this by reading from supported_protocols.
+        let disconnect_message_supported = true;
+        let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
+            Some(request_response::cbor::Behaviour::new(
+                [(
+                    StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
+                        .expect("name start with /"),
+                    ProtocolSupport::Full,
+                )],
+                request_response::Config::default(),
+            ))
+        } else {
+            None
+        });
+
         let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
@@ -136,9 +228,10 @@ impl NetworkController {
                 ping: ping::Behaviour::new(
                     ping::Config::new().with_interval(Duration::from_secs(1)),
                 ),
+                disconnect_message: disconenct_message_behaviour,
             })
             .expect("Create behaviour")
-            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(5)))
+            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(3600)))
             .build();
 
         let libp2p_port = std::env::var("LIBP2P_PORT")

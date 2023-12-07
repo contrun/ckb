@@ -543,9 +543,20 @@ impl NetworkController {
         info!("Dialing {}", &multiaddr);
         handle.spawn_task(async move {
             let _ = command_sender
-                .send(libp2p::Command::Dial {
-                    multiaddr: multiaddr,
-                })
+                .send(libp2p::Command::Dial { multiaddr })
+                .await;
+        });
+    }
+
+    pub fn disconnect_libp2p_peer(&self, peer: libp2p::PeerId, message: String) {
+        let libp2p = self.libp2p();
+
+        let handle = &libp2p.handle;
+        let command_sender = libp2p.command_sender.clone();
+        info!("Disconnecting {}", &peer);
+        handle.spawn_task(async move {
+            let _ = command_sender
+                .send(libp2p::Command::Disconnect { peer, message })
                 .await;
         });
     }

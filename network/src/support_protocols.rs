@@ -16,7 +16,7 @@ pub const LASTEST_VERSION: &str = "3";
 /// you only need to implement a few core protocols.
 ///
 /// Core protocol: identify/discovery/sync/relay
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum SupportProtocols {
     /// Ping: as a health check for ping/pong
     Ping,
