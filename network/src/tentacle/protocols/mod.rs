@@ -165,6 +165,7 @@ pub trait CKBProtocolHandler: Sync + Send {
 }
 
 /// Help to build protocol meta
+#[Derive(Clone)]
 pub struct CKBProtocol {
     protocol: SupportProtocols,
     // for example: b"/ckb/"
@@ -172,7 +173,7 @@ pub struct CKBProtocol {
     // supported version, used to check protocol version
     supported_versions: Vec<ProtocolVersion>,
     max_frame_length: usize,
-    handler: Box<dyn CKBProtocolHandler>,
+    handler: Arc<Box<dyn CKBProtocolHandler>>,
     network_state: Arc<NetworkState>,
 }
 
@@ -181,7 +182,7 @@ impl CKBProtocol {
     // a helper constructor to build `CKBProtocol` with `SupportProtocols` enum
     pub fn new_with_support_protocol(
         support_protocol: support_protocols::SupportProtocols,
-        handler: Box<dyn CKBProtocolHandler>,
+        handler: Arc<Box<dyn CKBProtocolHandler>>,
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
@@ -200,7 +201,7 @@ impl CKBProtocol {
         id: ProtocolId,
         versions: &[ProtocolVersion],
         max_frame_length: usize,
-        handler: Box<dyn CKBProtocolHandler>,
+        handler: Arc<Box<dyn CKBProtocolHandler>>,
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
@@ -268,7 +269,7 @@ impl CKBProtocol {
 struct CKBHandler {
     proto_id: ProtocolId,
     network_state: Arc<NetworkState>,
-    handler: Box<dyn CKBProtocolHandler>,
+    handler: Arc<Box<dyn CKBProtocolHandler>>,
 }
 
 // Just proxy to inner handler, this struct exists for convenient unit test.
