@@ -164,6 +164,7 @@ pub trait CKBProtocolHandler: Sync + Send {
 }
 
 /// Help to build protocol meta
+#[derive(Clone)]
 pub struct CKBProtocol {
     protocol: SupportProtocols,
     // for example: b"/ckb/"
@@ -171,7 +172,7 @@ pub struct CKBProtocol {
     // supported version, used to check protocol version
     supported_versions: Vec<ProtocolVersion>,
     max_frame_length: usize,
-    handler: Box<dyn CKBProtocolHandler>,
+    handler: Arc<Box<dyn CKBProtocolHandler>>,
     network_state: Arc<NetworkState>,
 }
 
@@ -180,7 +181,7 @@ impl CKBProtocol {
     // a helper constructor to build `CKBProtocol` with `SupportProtocols` enum
     pub fn new_with_support_protocol(
         support_protocol: SupportProtocols,
-        handler: Box<dyn CKBProtocolHandler>,
+        handler: Arc<Box<dyn CKBProtocolHandler>>,
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
@@ -199,7 +200,7 @@ impl CKBProtocol {
         id: ProtocolId,
         versions: &[ProtocolVersion],
         max_frame_length: usize,
-        handler: Box<dyn CKBProtocolHandler>,
+        handler: Arc<Box<dyn CKBProtocolHandler>>,
         network_state: Arc<NetworkState>,
     ) -> Self {
         CKBProtocol {
@@ -267,7 +268,7 @@ impl CKBProtocol {
 struct CKBHandler {
     proto_id: ProtocolId,
     network_state: Arc<NetworkState>,
-    handler: Box<dyn CKBProtocolHandler>,
+    handler: Arc<Box<dyn CKBProtocolHandler>>,
 }
 
 // Just proxy to inner handler, this struct exists for convenient unit test.
@@ -280,7 +281,7 @@ impl ServiceProtocol for CKBHandler {
             p2p_control: context.control().to_owned().into(),
             async_p2p_control: context.control().to_owned(),
         };
-        self.handler.init(Arc::new(nc)).await;
+        // self.handler.init(Arc::new(nc)).await;
     }
 
     async fn connected(&mut self, context: ProtocolContextMutRef<'_>, version: &str) {
