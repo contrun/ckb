@@ -539,7 +539,10 @@ impl NetworkService {
         let p2p_service = service_builder.build(event_handler);
 
         // == Build background service tasks
+        // TODO: need port this to libp2p, one thing that we need to be careful
+        // is that we use the same MultiAddr format for libp2p and tentacle.
         let dump_peer_store_service = DumpPeerStoreService::new(Arc::clone(&network_state));
+        // TODO: need port this to libp2p
         let protocol_type_checker_service = ProtocolTypeCheckerService::new(
             Arc::clone(&network_state),
             p2p_service.control().to_owned().into(),
@@ -549,6 +552,7 @@ impl NetworkService {
             Box::pin(dump_peer_store_service) as Pin<Box<_>>,
             Box::pin(protocol_type_checker_service) as Pin<Box<_>>,
         ];
+        // TODO: need port this to libp2p
         if config.outbound_peer_service_enabled() {
             let outbound_peer_service = OutboundPeerService::new(
                 Arc::clone(&network_state),

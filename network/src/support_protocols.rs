@@ -1,10 +1,13 @@
 use crate::ProtocolId;
+use libp2p::swarm::SupportedProtocols;
 use p2p::{
     builder::MetaBuilder,
     service::{ProtocolHandle, ProtocolMeta},
     traits::ServiceProtocol,
 };
 use tokio_util::codec::length_delimited;
+
+use ckb_app_config::SupportProtocol;
 
 pub const LASTEST_VERSION: &str = "3";
 
@@ -56,6 +59,25 @@ pub enum SupportProtocols {
     LightClient,
     /// Filter: A protocol used for client side block data filtering.
     Filter,
+}
+
+impl From<&SupportProtocol> for SupportProtocols {
+    fn from(p: &SupportProtocol) -> SupportProtocols {
+        match *p {
+            SupportProtocol::Ping => SupportProtocols::Ping,
+            SupportProtocol::Discovery => SupportProtocols::Discovery,
+            SupportProtocol::Identify => SupportProtocols::Identify,
+            SupportProtocol::Feeler => SupportProtocols::Feeler,
+            SupportProtocol::DisconnectMessage => SupportProtocols::DisconnectMessage,
+            SupportProtocol::Sync => SupportProtocols::Sync,
+            SupportProtocol::Relay => SupportProtocols::RelayV3,
+            SupportProtocol::Time => SupportProtocols::Time,
+            SupportProtocol::Alert => SupportProtocols::Alert,
+            SupportProtocol::LightClient => SupportProtocols::LightClient,
+            SupportProtocol::Filter => SupportProtocols::Filter,
+            _ => panic!("Unsupported protocol {:?}", p),
+        }
+    }
 }
 
 impl SupportProtocols {

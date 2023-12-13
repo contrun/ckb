@@ -31,6 +31,7 @@ use ckb_tx_pool::service::TxVerificationResult;
 use ckb_types::prelude::*;
 use ckb_verification::GenesisVerifier;
 use ckb_verification_traits::Verifier;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 const SECP256K1_BLAKE160_SIGHASH_ALL_ARG_LEN: usize = 20;
@@ -290,7 +291,11 @@ impl Launcher {
         )];
 
         let support_protocols = &self.args.config.network.support_protocols;
-        let mut flags = Flags::all();
+
+        let protocol_list: Vec<SupportProtocols> =
+            support_protocols.iter().map(|p| p.into()).collect();
+
+        let flags = Flags::from_support_protocols(&protocol_list);
 
         if support_protocols.contains(&SupportProtocol::Relay) {
             let relayer = Relayer::new(chain_controller.clone(), Arc::clone(&sync_shared));
@@ -307,8 +312,6 @@ impl Launcher {
                     Arc::clone(&network_state),
                 ))
             }
-        } else {
-            flags.remove(Flags::RELAY);
         }
 
         if support_protocols.contains(&SupportProtocol::Filter) {
@@ -319,8 +322,6 @@ impl Launcher {
                 Box::new(filter),
                 Arc::clone(&network_state),
             ));
-        } else {
-            flags.remove(Flags::BLOCK_FILTER);
         }
 
         if support_protocols.contains(&SupportProtocol::Time) {
@@ -339,8 +340,6 @@ impl Launcher {
                 Box::new(light_client),
                 Arc::clone(&network_state),
             ));
-        } else {
-            flags.remove(Flags::LIGHT_CLIENT);
         }
 
         let alert_signature_config = self.args.config.alert_signature.clone().unwrap_or_default();

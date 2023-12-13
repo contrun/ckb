@@ -641,3 +641,23 @@ bitflags::bitflags! {
         const BLOCK_FILTER = 0b100000;
     }
 }
+
+impl Flags {
+    pub fn from_support_protocols(protocols: &[SupportProtocols]) -> Self {
+        let mut flags = Self::all();
+        let protocols: Vec<SupportProtocols> = protocols.into_iter().map(|x| *x).collect();
+
+        if !protocols.contains(&SupportProtocols::RelayV3)
+            && !protocols.contains(&SupportProtocols::RelayV2)
+        {
+            flags.remove(Flags::RELAY);
+        }
+        if !protocols.contains(&SupportProtocols::Filter) {
+            flags.remove(Flags::BLOCK_FILTER);
+        }
+        if !protocols.contains(&SupportProtocols::LightClient) {
+            flags.remove(Flags::LIGHT_CLIENT);
+        }
+        flags
+    }
+}
