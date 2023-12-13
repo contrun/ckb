@@ -35,7 +35,7 @@ pub(crate) struct DisconnectMessageResponse(String);
 #[derive(NetworkBehaviour)]
 struct MyBehaviour {
     identify: identify::Behaviour,
-    ping: ping::Behaviour,
+    ping: Toggle<ping::Behaviour>,
     disconnect_message: Toggle<
         request_response::cbor::Behaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
     >,
@@ -84,8 +84,29 @@ impl NetworkService {
             SwarmEvent::ConnectionClosed { peer_id, .. } => {
                 info!("Disconnected from {}", peer_id);
             }
-            SwarmEvent::Behaviour(MyBehaviourEvent::Ping(ping::Event { peer, result, .. })) => {
-                info!("Ping Peer {} result {:?}", peer, result);
+            SwarmEvent::Behaviour(MyBehaviourEvent::Ping(ping::Event {
+                peer,
+                result,
+                connection,
+            })) => {
+                info!(
+                    "Ping Peer {} result {:?} connection {}",
+                    peer, result, connection
+                );
+                match result {
+                    Err(e) => {
+                        info!(
+                            "Closing connection {} to peer {} because ping failure ({})",
+                            connection, peer, e
+                        );
+                        let _ = self.swarm.close_connection(connection);
+                    }
+                    Ok(_) => {
+                        // TODO: also need to update peer state here.
+                        // fields like last_ping_protocol_message_received_at and ping_rtt of the peer should be changed,
+                        // which is hard to do as the Peer struct contains tentacle specific fields.
+                    }
+                }
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::Identify(event)) => {
                 info!("Identify event {:?}", event);
@@ -184,6 +205,7 @@ impl NetworkController {
         supported_protocols: &[SupportProtocols],
         _required_protocol_ids: &[SupportProtocols],
     ) -> Result<Self, Error> {
+        info!("supported protocols {:?}", supported_protocols);
         let priv_key_bytes: [u8; 32] = network_state
             .config
             .fetch_private_key_bytes()?
@@ -194,6 +216,19 @@ impl NetworkController {
         // libp2p::identity only exports function secp256k1_from_der
         let keypair = libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes)
             .expect("Valid ed25519 key");
+
+        let ping_behaviour =
+            Toggle::from(if supported_protocols.contains(&SupportProtocols::Ping) {
+                let interval = Duration::from_secs(network_state.config.ping_interval_secs);
+                let timeout = Duration::from_secs(network_state.config.ping_timeout_secs);
+                Some(ping::Behaviour::new(
+                    ping::Config::new()
+                        .with_interval(interval)
+                        .with_timeout(timeout),
+                ))
+            } else {
+                None
+            });
 
         let disconnect_message_supported =
             supported_protocols.contains(&SupportProtocols::DisconnectMessage);
@@ -223,9 +258,7 @@ impl NetworkController {
                     format!("{}/{}/0.0.1", network_identification, client_version),
                     key.public(),
                 )),
-                ping: ping::Behaviour::new(
-                    ping::Config::new().with_interval(Duration::from_secs(1)),
-                ),
+                ping: ping_behaviour,
                 disconnect_message: disconenct_message_behaviour,
             })
             .expect("Create behaviour")
