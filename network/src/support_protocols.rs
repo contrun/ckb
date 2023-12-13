@@ -1,5 +1,4 @@
 use crate::ProtocolId;
-use libp2p::swarm::SupportedProtocols;
 use p2p::{
     builder::MetaBuilder,
     service::{ProtocolHandle, ProtocolMeta},
@@ -75,7 +74,6 @@ impl From<&SupportProtocol> for SupportProtocols {
             SupportProtocol::Alert => SupportProtocols::Alert,
             SupportProtocol::LightClient => SupportProtocols::LightClient,
             SupportProtocol::Filter => SupportProtocols::Filter,
-            _ => panic!("Unsupported protocol {:?}", p),
         }
     }
 }

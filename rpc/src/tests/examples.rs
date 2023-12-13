@@ -262,7 +262,7 @@ fn setup_rpc_test_suite(height: u64) -> RpcTestSuite {
             chain_controller.clone(),
         )
         .enable_debug()
-        .enable_alert(alert_verifier, alert_notifier, network_controller);
+        .enable_alert(network_controller);
     let io_handler = builder.build();
 
     let rpc_server = RpcServer::new(

@@ -1,12 +1,10 @@
-
-use crate::{NetworkState};
+use crate::NetworkState;
 
 use crate::errors::Error;
 use crate::SupportProtocols;
 
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace};
-
 
 use core::time::Duration;
 use libp2p::{
@@ -183,8 +181,8 @@ impl NetworkController {
         network_identification: String,
         client_version: String,
         network_state: Arc<NetworkState>,
-        _supported_protocols: Vec<SupportProtocols>,
-        _required_protocol_ids: Vec<SupportProtocols>,
+        supported_protocols: &[SupportProtocols],
+        _required_protocol_ids: &[SupportProtocols],
     ) -> Result<Self, Error> {
         let priv_key_bytes: [u8; 32] = network_state
             .config
@@ -197,13 +195,13 @@ impl NetworkController {
         let keypair = libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes)
             .expect("Valid ed25519 key");
 
-        // TODO: Set this by reading from supported_protocols.
-        let disconnect_message_supported = true;
+        let disconnect_message_supported =
+            supported_protocols.contains(&SupportProtocols::DisconnectMessage);
         let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
             Some(request_response::cbor::Behaviour::new(
                 [(
                     StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
-                        .expect("name start with /"),
+                        .expect("Protocol of DisconnectMessage name start with /"),
                     ProtocolSupport::Full,
                 )],
                 request_response::Config::default(),

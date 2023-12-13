@@ -16,7 +16,7 @@ use protocols::{
     ping::PingHandler,
 };
 
-use crate::{CKBProtocol, PeerIndex, ProtocolId, ServiceControl};
+use crate::{CKBProtocol, PeerIndex, ServiceControl};
 use ckb_app_config::{default_support_all_protocols, SupportProtocol};
 use ckb_logger::{debug, error, info, warn};
 use ckb_spawn::Spawn;
@@ -315,7 +315,7 @@ impl NetworkService {
     pub fn new(
         network_state: Arc<NetworkState>,
         protocols: Vec<CKBProtocol>,
-        required_protocol_ids: Vec<ProtocolId>,
+        required_protocols: Vec<SupportProtocols>,
         // name, version, flags
         identify_announce: (String, String, Flags),
     ) -> Self {
@@ -546,7 +546,10 @@ impl NetworkService {
         let protocol_type_checker_service = ProtocolTypeCheckerService::new(
             Arc::clone(&network_state),
             p2p_service.control().to_owned().into(),
-            required_protocol_ids,
+            required_protocols
+                .iter()
+                .map(|p| (*p).protocol_id())
+                .collect(),
         );
         let mut bg_services = vec![
             Box::pin(dump_peer_store_service) as Pin<Box<_>>,
