@@ -8,7 +8,7 @@ pub(crate) mod ping;
 mod tests;
 
 use ckb_logger::{debug, trace};
-use futures::{Future, FutureExt};
+use futures::Future;
 use p2p::{
     async_trait,
     builder::MetaBuilder,
@@ -18,12 +18,7 @@ use p2p::{
     traits::ServiceProtocol,
     ProtocolId, SessionId,
 };
-use std::{
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-    time::Duration,
-};
+use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio_util::codec::length_delimited;
 
 /// Alias session id
@@ -66,8 +61,6 @@ pub trait CKBProtocolContext: Send {
         target: TargetSession,
         data: Bytes,
     ) -> Result<(), Error>;
-    /// spawn a future task, if `blocking` is true we use tokio_threadpool::blocking to handle the task.
-    async fn async_future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error>;
     /// Send message
     async fn async_send_message(
         &self,
@@ -93,8 +86,6 @@ pub trait CKBProtocolContext: Send {
     fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error>;
     /// Filter broadcast message through quick queue
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error>;
-    /// spawn a future task, if `blocking` is true we use tokio_threadpool::blocking to handle the task.
-    fn future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error>;
     /// Send message
     fn send_message(
         &self,
@@ -458,15 +449,6 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             .await?;
         Ok(())
     }
-    async fn async_future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error> {
-        let task = if blocking {
-            Box::pin(BlockingFutureTask::new(task))
-        } else {
-            task
-        };
-        self.async_p2p_control.future_task(task).await?;
-        Ok(())
-    }
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
@@ -542,15 +524,6 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
         self.p2p_control
             .quick_filter_broadcast(target, self.proto_id, data)?;
-        Ok(())
-    }
-    fn future_task(&self, task: BoxedFutureTask, blocking: bool) -> Result<(), Error> {
-        let task = if blocking {
-            Box::pin(BlockingFutureTask::new(task))
-        } else {
-            task
-        };
-        self.p2p_control.future_task(task)?;
         Ok(())
     }
     fn send_message(
@@ -631,23 +604,5 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
 
     fn p2p_control(&self) -> Option<&ServiceControl> {
         Some(&self.p2p_control)
-    }
-}
-
-pub(crate) struct BlockingFutureTask {
-    task: BoxedFutureTask,
-}
-
-impl BlockingFutureTask {
-    pub(crate) fn new(task: BoxedFutureTask) -> BlockingFutureTask {
-        BlockingFutureTask { task }
-    }
-}
-
-impl Future for BlockingFutureTask {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        tokio::task::block_in_place(|| self.task.poll_unpin(cx))
     }
 }

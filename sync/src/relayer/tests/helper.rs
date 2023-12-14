@@ -269,13 +269,6 @@ impl CKBProtocolContext for MockProtocolContext {
     ) -> Result<(), Error> {
         unimplemented!();
     }
-    async fn async_future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), Error> {
-        Ok(())
-    }
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
@@ -319,13 +312,6 @@ impl CKBProtocolContext for MockProtocolContext {
     }
     fn quick_filter_broadcast(&self, _target: TargetSession, _data: P2pBytes) -> Result<(), Error> {
         unimplemented!();
-    }
-    fn future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), Error> {
-        Ok(())
     }
     fn send_message(
         &self,

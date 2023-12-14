@@ -431,13 +431,6 @@ impl CKBProtocolContext for DummyNetworkContext {
     async fn remove_notify(&self, _token: u64) -> Result<(), ckb_network::Error> {
         unimplemented!()
     }
-    async fn async_future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        Ok(())
-    }
 
     async fn async_quick_send_message(
         &self,
@@ -489,15 +482,6 @@ impl CKBProtocolContext for DummyNetworkContext {
         _msg: &str,
     ) -> Result<(), ckb_network::Error> {
         self.disconnected.lock().insert(peer_index);
-        Ok(())
-    }
-
-    fn future_task(
-        &self,
-        _task: Pin<Box<dyn Future<Output = ()> + 'static + Send>>,
-        _blocking: bool,
-    ) -> Result<(), ckb_network::Error> {
-        //            task.await.expect("resolve future task error");
         Ok(())
     }
 
