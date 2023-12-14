@@ -22,7 +22,7 @@ fn test_accept_inbound_peer_in_reserve_only_mode() {
     // whitelist_only mode: only accept whitelist_peer
     let mut peers = PeerRegistry::new(3, 3, true, vec![whitelist_addr.clone()]);
     let err = peers
-        .accept_peer(
+        .accept_tentacle_peer(
             random_addr(),
             session_id,
             SessionType::Inbound,
@@ -35,7 +35,7 @@ fn test_accept_inbound_peer_in_reserve_only_mode() {
     );
 
     peers
-        .accept_peer(
+        .accept_tentacle_peer(
             whitelist_addr,
             session_id,
             SessionType::Inbound,
@@ -54,7 +54,7 @@ fn test_accept_inbound_peer_until_full() {
     let mut peers = PeerRegistry::new(3, 3, false, vec![whitelist_addr.clone()]);
     for session_id in 1..=3 {
         peers
-            .accept_peer(
+            .accept_tentacle_peer(
                 random_addr(),
                 session_id.into(),
                 SessionType::Inbound,
@@ -64,7 +64,7 @@ fn test_accept_inbound_peer_until_full() {
     }
 
     let err = peers
-        .accept_peer(
+        .accept_tentacle_peer(
             random_addr(),
             3.into(),
             SessionType::Outbound,
@@ -78,7 +78,7 @@ fn test_accept_inbound_peer_until_full() {
 
     // test evict a peer
     assert!(peers
-        .accept_peer(
+        .accept_tentacle_peer(
             random_addr(),
             4.into(),
             SessionType::Inbound,
@@ -88,7 +88,7 @@ fn test_accept_inbound_peer_until_full() {
         .is_some());
     // should still accept whitelist peer
     peers
-        .accept_peer(
+        .accept_tentacle_peer(
             whitelist_addr.clone(),
             5.into(),
             SessionType::Inbound,
@@ -96,7 +96,7 @@ fn test_accept_inbound_peer_until_full() {
         )
         .expect("accept");
     let err = peers
-        .accept_peer(
+        .accept_tentacle_peer(
             whitelist_addr.clone(),
             6.into(),
             SessionType::Inbound,
@@ -138,7 +138,7 @@ fn test_accept_inbound_peer_eviction() {
     // prepare all peers
     for session_id in 0..protected_peers_count {
         assert!(peers_registry
-            .accept_peer(
+            .accept_tentacle_peer(
                 random_addr(),
                 session_id.into(),
                 SessionType::Inbound,
@@ -205,7 +205,7 @@ fn test_accept_inbound_peer_eviction() {
     }
 
     peers_registry
-        .accept_peer(
+        .accept_tentacle_peer(
             random_addr(),
             2000.into(),
             SessionType::Inbound,

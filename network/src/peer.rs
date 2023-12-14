@@ -47,7 +47,7 @@ pub struct Peer {
 
 impl Peer {
     /// Init session info
-    pub fn new(
+    pub fn new_tentacle(
         session_id: SessionId,
         session_type: SessionType,
         connected_addr: Multiaddr,

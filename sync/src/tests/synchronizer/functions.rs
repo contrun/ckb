@@ -404,7 +404,7 @@ struct DummyNetworkContext {
 }
 
 fn mock_peer_info() -> Peer {
-    Peer::new(
+    Peer::new_tentacle(
         0.into(),
         SessionType::Outbound,
         format!("/ip4/127.0.0.1/tcp/42/p2p/{}", PeerId::random().to_base58())

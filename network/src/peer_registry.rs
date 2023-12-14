@@ -14,7 +14,7 @@ pub(crate) const EVICTION_PROTECT_PEERS: usize = 8;
 
 /// Memory records of opened session information
 pub struct PeerRegistry {
-    peers: HashMap<SessionId, Peer>,
+    tentacle_peers: HashMap<SessionId, Peer>,
     // max inbound limitation
     max_inbound: u32,
     // max outbound limitation
@@ -59,7 +59,7 @@ impl PeerRegistry {
         whitelist_peers: Vec<Multiaddr>,
     ) -> Self {
         PeerRegistry {
-            peers: HashMap::with_capacity_and_hasher(20, Default::default()),
+            tentacle_peers: HashMap::with_capacity_and_hasher(20, Default::default()),
             whitelist_peers: whitelist_peers.iter().filter_map(extract_peer_id).collect(),
             feeler_peers: HashSet::default(),
             max_inbound,
@@ -68,14 +68,14 @@ impl PeerRegistry {
         }
     }
 
-    pub(crate) fn accept_peer(
+    pub(crate) fn accept_tentacle_peer(
         &mut self,
         remote_addr: Multiaddr,
         session_id: SessionId,
         session_type: SessionType,
         peer_store: &mut PeerStore,
     ) -> Result<Option<Peer>, Error> {
-        if self.peers.contains_key(&session_id) {
+        if self.tentacle_peers.contains_key(&session_id) {
             return Err(PeerError::SessionExists(session_id).into());
         }
         let peer_id = extract_peer_id(&remote_addr).expect("opened session should have peer id");
@@ -109,15 +109,15 @@ impl PeerRegistry {
             }
         }
         peer_store.add_connected_peer(remote_addr.clone(), session_type);
-        let peer = Peer::new(session_id, session_type, remote_addr, is_whitelist);
-        self.peers.insert(session_id, peer);
+        let peer = Peer::new_tentacle(session_id, session_type, remote_addr, is_whitelist);
+        self.tentacle_peers.insert(session_id, peer);
         Ok(evicted_peer)
     }
 
     // try to evict an inbound peer
     fn try_evict_inbound_peer(&self, _peer_store: &PeerStore) -> Option<SessionId> {
         let mut candidate_peers = {
-            self.peers
+            self.tentacle_peers
                 .values()
                 .filter(|peer| peer.is_inbound() && !peer.is_whitelist)
                 .collect::<Vec<_>>()
@@ -209,21 +209,21 @@ impl PeerRegistry {
 
     /// Get peer info
     pub fn get_peer(&self, session_id: SessionId) -> Option<&Peer> {
-        self.peers.get(&session_id)
+        self.tentacle_peers.get(&session_id)
     }
 
     /// Get mut peer info
     pub fn get_peer_mut(&mut self, session_id: SessionId) -> Option<&mut Peer> {
-        self.peers.get_mut(&session_id)
+        self.tentacle_peers.get_mut(&session_id)
     }
 
     pub(crate) fn remove_peer(&mut self, session_id: SessionId) -> Option<Peer> {
-        self.peers.remove(&session_id)
+        self.tentacle_peers.remove(&session_id)
     }
 
     /// Get session id by peer id
     pub fn get_key_by_peer_id(&self, peer_id: &PeerId) -> Option<SessionId> {
-        self.peers.iter().find_map(|(session_id, peer)| {
+        self.tentacle_peers.iter().find_map(|(session_id, peer)| {
             extract_peer_id(&peer.connected_addr).and_then(|pid| {
                 if &pid == peer_id {
                     Some(*session_id)
@@ -236,19 +236,23 @@ impl PeerRegistry {
 
     /// Get all connected peers' information
     pub fn peers(&self) -> &HashMap<SessionId, Peer> {
-        &self.peers
+        &self.tentacle_peers
     }
 
     /// Get all sessions' id
     pub fn connected_peers(&self) -> Vec<SessionId> {
-        self.peers.keys().cloned().collect()
+        self.tentacle_peers.keys().cloned().collect()
     }
 
     pub(crate) fn connection_status(&self) -> ConnectionStatus {
-        let total = self.peers.len() as u32;
+        let total = self.tentacle_peers.len() as u32;
         let mut non_whitelist_inbound: u32 = 0;
         let mut non_whitelist_outbound: u32 = 0;
-        for peer in self.peers.values().filter(|peer| !peer.is_whitelist) {
+        for peer in self
+            .tentacle_peers
+            .values()
+            .filter(|peer| !peer.is_whitelist)
+        {
             if peer.is_outbound() {
                 non_whitelist_outbound += 1;
             } else {

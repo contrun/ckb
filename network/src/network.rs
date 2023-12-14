@@ -222,7 +222,7 @@ impl NetworkState {
         //    because peer_store's lock scope across peer_registry's lock scope
         let mut peer_store = self.peer_store.lock();
         let accept_peer_result = {
-            self.peer_registry.write().accept_peer(
+            self.peer_registry.write().accept_tentacle_peer(
                 session_context.address.clone(),
                 session_context.id,
                 session_context.ty,
