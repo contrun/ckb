@@ -203,11 +203,9 @@ impl NetworkState {
                 );
                 match peer.index {
                     PeerIndex::Tentacle(s) => {
-                        if let Err(err) = tentacle_disconnect_with_message(
-                            p2p_control,
-                            s,
-                            message.as_str(),
-                        ) {
+                        if let Err(err) =
+                            tentacle_disconnect_with_message(p2p_control, s, message.as_str())
+                        {
                             debug!("Disconnect failed {:?}, error: {:?}", s, err);
                         }
                     }

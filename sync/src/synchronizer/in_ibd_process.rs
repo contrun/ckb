@@ -1,7 +1,7 @@
 use crate::synchronizer::Synchronizer;
 use crate::{Status, StatusCode};
 use ckb_logger::info;
-use ckb_network::{Command, PeerIndex, CommandSender};
+use ckb_network::{Command, CommandSender, PeerIndex};
 
 pub struct InIBDProcess<'a> {
     synchronizer: &'a Synchronizer,

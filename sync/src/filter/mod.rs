@@ -7,7 +7,6 @@ use ckb_network::{Command, CommandSender};
 use get_block_filter_check_points_process::GetBlockFilterCheckPointsProcess;
 use get_block_filter_hashes_process::GetBlockFilterHashesProcess;
 use get_block_filters_process::GetBlockFiltersProcess;
-use tokio::sync::mpsc;
 
 use crate::utils::{metric_ckb_message_bytes, MetricDirection};
 use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
@@ -91,7 +90,7 @@ impl BlockFilter {
                 ban_time,
                 status
             );
-            command_sender.send(Command::Ban {
+            command_sender.must_send(Command::Ban {
                 peer_index: peer,
                 duration: ban_time,
                 reason: status.to_string(),
@@ -151,11 +150,11 @@ impl CKBProtocolHandler for BlockFilter {
             peer_index
         );
         let start_time = Instant::now();
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
         tokio::task::block_in_place(move || {
-            let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
             tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
-            nc.process_command_stream(command_receiver);
         });
+        let _ = nc.process_command_stream(command_receiver).await;
         debug_target!(
             crate::LOG_TARGET_FILTER,
             "process message={}, peer={}, cost={:?}",

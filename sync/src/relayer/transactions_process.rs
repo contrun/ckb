@@ -1,13 +1,13 @@
 use crate::relayer::Relayer;
 use crate::Status;
 use ckb_logger::error;
-use ckb_network::{CKBProtocolContext, PeerIndex, Command, CommandSender};
+use ckb_network::{Command, CommandSender, PeerIndex};
 use ckb_types::{
     core::{Cycle, TransactionView},
     packed,
     prelude::*,
 };
-use std::sync::Arc;
+
 use std::time::Duration;
 
 const DEFAULT_BAN_TIME: Duration = Duration::from_secs(3600 * 24 * 3);
@@ -70,7 +70,7 @@ impl<'a> TransactionsProcess<'a> {
             .iter()
             .any(|(_, declared_cycles)| declared_cycles > &max_block_cycles)
         {
-            self.command_sender.send(Command::Ban {
+            self.command_sender.must_send(Command::Ban {
                 peer_index: self.peer,
                 duration: DEFAULT_BAN_TIME,
                 reason: String::from("relay declared cycles greater than max_block_cycles"),

@@ -127,11 +127,13 @@ pub(crate) fn send_message_to<Message: Entity>(
 ///
 /// Equal to `nc.send_message_to`.
 #[must_use]
-pub(crate) fn send_protocol_message_with_command_sender<Message: Entity>(command_sender: &CommandSender, peer_index: PeerIndex,
+pub(crate) fn send_protocol_message_with_command_sender<Message: Entity>(
+    command_sender: &CommandSender,
+    peer_index: PeerIndex,
     message: &Message,
 ) -> Status {
     send_message_with_command_sender(
-        &command_sender,
+        command_sender,
         command_sender.protocol(),
         peer_index,
         message,

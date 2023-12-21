@@ -8,7 +8,7 @@ use super::{
 
 use crate::{
     network::TentacleEventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
-    NetworkState, PeerIdentifyInfo, SupportProtocols,
+    NetworkState, PeerIdentifyInfo, SupportProtocols, PeerIndex,
 };
 
 use std::{
@@ -64,6 +64,9 @@ impl Node {
             .read()
             .peers()
             .keys()
+            .map(|p| match p {
+                PeerIndex::Tentacle(s) => s,
+            })
             .cloned()
             .collect()
     }
@@ -73,7 +76,7 @@ impl Node {
             .peer_registry
             .read()
             .peers()
-            .get(&id)
+            .get(&id.into())
             .map(|peer| peer.protocols.keys().cloned().collect())
             .unwrap_or_default()
     }
@@ -83,7 +86,7 @@ impl Node {
             .peer_registry
             .read()
             .peers()
-            .get(&id)
+            .get(&id.into())
             .map(|peer| peer.identify_info.clone())
             .unwrap_or_default()
     }

@@ -1,7 +1,7 @@
 use crate::filter::BlockFilter;
 use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status};
-use ckb_network::{PeerIndex, CommandSender};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{core::BlockNumber, packed, prelude::*};
 
 const BATCH_SIZE: BlockNumber = 2000;
@@ -67,7 +67,11 @@ impl<'a> GetBlockFilterHashesProcess<'a> {
             let message = packed::BlockFilterMessage::new_builder()
                 .set(content)
                 .build();
-            attempt!(send_protocol_message_with_command_sender(&self.command_sender, self.peer, &message))
+            attempt!(send_protocol_message_with_command_sender(
+                &self.command_sender,
+                self.peer,
+                &message
+            ))
         } else {
             Status::ignored()
         }

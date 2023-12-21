@@ -645,7 +645,7 @@ bitflags::bitflags! {
 impl Flags {
     pub fn from_support_protocols(protocols: &[SupportProtocols]) -> Self {
         let mut flags = Self::all();
-        let protocols: Vec<SupportProtocols> = protocols.into_iter().map(|x| *x).collect();
+        let protocols: Vec<SupportProtocols> = protocols.to_vec();
 
         if !protocols.contains(&SupportProtocols::RelayV3)
             && !protocols.contains(&SupportProtocols::RelayV2)

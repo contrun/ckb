@@ -8,7 +8,6 @@ use ckb_types::{core, packed, prelude::*};
 use std::collections::hash_map::Entry;
 use std::mem;
 
-
 // Keeping in mind that short_ids are expected to occasionally collide.
 // On receiving block-transactions message,
 // while the reconstructed the block has a different transactions_root,
@@ -167,7 +166,11 @@ impl<'a> BlockTransactionsProcess<'a> {
                     .build();
                 let message = packed::RelayMessage::new_builder().set(content).build();
 
-                attempt!(send_protocol_message_with_command_sender(&self.command_sender, self.peer, &message));
+                attempt!(send_protocol_message_with_command_sender(
+                    &self.command_sender,
+                    self.peer,
+                    &message
+                ));
 
                 let _ignore_prev_value =
                     mem::replace(expected_transaction_indexes, missing_transactions);

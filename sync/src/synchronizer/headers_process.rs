@@ -5,7 +5,7 @@ use crate::{Status, StatusCode};
 use ckb_constant::sync::MAX_HEADERS_LEN;
 use ckb_error::Error;
 use ckb_logger::{debug, log_enabled, warn, Level};
-use ckb_network::{PeerIndex, CommandSender, Command};
+use ckb_network::{Command, CommandSender, PeerIndex};
 use ckb_traits::HeaderFieldsProvider;
 use ckb_types::{core, packed, prelude::*};
 use ckb_verification::{HeaderError, HeaderVerifier};

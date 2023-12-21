@@ -2,10 +2,9 @@ use crate::relayer::{Relayer, MAX_RELAY_TXS_BYTES_PER_BATCH, MAX_RELAY_TXS_NUM_P
 use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status, StatusCode};
 use ckb_logger::{debug_target, trace_target};
-use ckb_network::{PeerIndex, CommandSender};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{packed, prelude::*};
 use std::collections::HashSet;
-
 
 pub struct GetTransactionsProcess<'a> {
     message: packed::GetRelayTransactionsReader<'a>,

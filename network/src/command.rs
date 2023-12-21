@@ -72,6 +72,14 @@ impl CommandSender {
         self.channel.blocking_send(command)
     }
 
+    pub fn try_send(&self, command: Command) {
+        let _ = self.send(command);
+    }
+
+    pub fn must_send(&self, command: Command) {
+        self.send(command).expect("Receiver alive");
+    }
+
     pub fn protocol(&self) -> SupportProtocols {
         self.context.protocol
     }
@@ -84,7 +92,7 @@ impl CommandSender {
         let (sender, receiver) = oneshot::channel();
         match self.send(Command::GetPeer {
             peer_index: peer,
-            sender: sender,
+            sender,
         }) {
             Ok(_) => receiver.blocking_recv().ok().flatten(),
             Err(e) => {
@@ -96,7 +104,7 @@ impl CommandSender {
 
     pub fn get_connected_peers(&self) -> Vec<PeerIndex> {
         let (sender, receiver) = oneshot::channel();
-        match self.send(Command::GetConnectedPeers { sender: sender }) {
+        match self.send(Command::GetConnectedPeers { sender }) {
             Ok(_) => receiver.blocking_recv().ok().unwrap_or_default(),
             Err(e) => {
                 debug!("Failed to get connected peers: {:?}", e);

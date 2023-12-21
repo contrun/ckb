@@ -26,7 +26,7 @@ use ckb_types::{
     U256,
 };
 use ckb_verification_traits::Switch;
-use std::{cell::RefCell, future::Future, pin::Pin, sync::Arc, time::Duration};
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 pub(crate) fn new_index_transaction(index: usize) -> IndexTransaction {
     let transaction = TransactionBuilder::default()

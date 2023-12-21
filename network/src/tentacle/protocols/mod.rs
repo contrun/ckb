@@ -22,7 +22,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::{select, sync::mpsc};
 use tokio_util::codec::length_delimited;
 
-use crate::{Command, CommandSender, PeerIndex};
+use crate::{Command, PeerIndex};
 
 /// Boxed future task
 pub type BoxedFutureTask = Pin<Box<dyn Future<Output = ()> + 'static + Send>>;
@@ -125,9 +125,8 @@ pub trait CKBProtocolContext: Send {
                 message,
             } => {
                 let result = self.send_message(protocol.protocol_id(), peer_index, message);
-                match result {
-                    Err(e) => debug!("Failed to send message to peer {}: {:?}", peer_index, e),
-                    Ok(_) => {}
+                if let Err(e) = result {
+                    debug!("Failed to send message to peer {}: {:?}", peer_index, e);
                 };
             }
             Command::Ban {
@@ -140,26 +139,23 @@ pub trait CKBProtocolContext: Send {
                 message,
             } => {
                 let result = self.disconnect(peer_index, &message);
-                match result {
-                    Err(e) => debug!("Failed to disconnect from peer {}: {:?}", peer_index, e),
-                    Ok(_) => {}
+                if let Err(e) = result {
+                    debug!("Failed to disconnect from peer {}: {:?}", peer_index, e)
                 };
             }
             Command::GetPeer { peer_index, sender } => {
                 let result = sender.send(self.get_peer(peer_index));
-                match result {
-                    Err(e) => debug!(
+                if let Err(e) = result {
+                    debug!(
                         "Failed to send response of get_peer (peer: {}): {:?}",
                         peer_index, e
-                    ),
-                    Ok(_) => {}
+                    );
                 };
             }
             Command::GetConnectedPeers { sender } => {
                 let result = sender.send(self.connected_peers());
-                match result {
-                    Err(e) => debug!("Failed to send response of get connected peers: {:?}", e),
-                    Ok(_) => {}
+                if let Err(e) = result {
+                    debug!("Failed to send response of get connected peers: {:?}", e)
                 };
             }
             Command::Report {
@@ -168,7 +164,7 @@ pub trait CKBProtocolContext: Send {
             } => self.report_peer(peer_index, behaviour),
             Command::FilterBroadCast {
                 // TODO: need to send message to the specific protocol.
-                protocol,
+                protocol: _,
                 target,
                 message,
                 quick,
@@ -178,9 +174,8 @@ pub trait CKBProtocolContext: Send {
                 } else {
                     self.filter_broadcast(target, message)
                 };
-                match result {
-                    Err(e) => debug!("Failed to send broadcast: {:?}", e),
-                    Ok(_) => {}
+                if let Err(e) = result {
+                    debug!("Failed to send broadcast: {:?}", e)
                 };
             }
         }
@@ -494,9 +489,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.async_p2p_control
             .quick_send_message_to(session_id, proto_id, data)
             .await?;
@@ -513,9 +506,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.async_p2p_control
             .quick_send_message_to(session_id, self.proto_id, data)
             .await?;
@@ -543,9 +534,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.async_p2p_control
             .send_message_to(session_id, proto_id, data)
             .await?;
@@ -558,9 +547,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.async_p2p_control
             .send_message_to(session_id, self.proto_id, data)
             .await?;
@@ -578,9 +565,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         tentacle_async_disconnect_with_message(&self.async_p2p_control, session_id, message)
             .await?;
         Ok(())
@@ -597,9 +582,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.p2p_control
             .quick_send_message_to(session_id, proto_id, data)?;
         Ok(())
@@ -611,9 +594,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.p2p_control
             .quick_send_message_to(session_id, self.proto_id, data)?;
         Ok(())
@@ -635,9 +616,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.p2p_control
             .send_message_to(session_id, proto_id, data)?;
         Ok(())
@@ -649,9 +628,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.p2p_control
             .send_message_to(session_id, self.proto_id, data)?;
         Ok(())
@@ -663,9 +640,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         tentacle_disconnect_with_message(&self.p2p_control, session_id, message)?;
         Ok(())
     }
@@ -695,16 +670,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
         })
     }
     fn report_peer(&self, peer_index: PeerIndex, behaviour: Behaviour) {
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.network_state
             .report_session(&self.p2p_control, session_id, behaviour);
     }
     fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
-        let session_id = match peer_index {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer_index;
         self.network_state
             .ban_session(&self.p2p_control, session_id, duration, reason);
     }

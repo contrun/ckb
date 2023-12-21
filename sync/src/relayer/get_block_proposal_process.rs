@@ -1,11 +1,10 @@
 use crate::relayer::{Relayer, MAX_RELAY_TXS_BYTES_PER_BATCH};
-use crate::utils::{send_message_to, send_protocol_message_with_command_sender};
+use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status, StatusCode};
 use ckb_logger::debug_target;
-use ckb_network::{CKBProtocolContext, PeerIndex, CommandSender};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{packed, prelude::*};
 use std::collections::HashSet;
-use std::sync::Arc;
 
 pub struct GetBlockProposalProcess<'a> {
     message: packed::GetBlockProposalReader<'a>,

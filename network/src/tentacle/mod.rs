@@ -239,10 +239,7 @@ impl ServiceHandle for EventHandler {
                                         s,
                                         "evict because accepted better peer",
                                     ) {
-                                        debug!(
-                                            "Disconnect failed {:?}, error: {:?}",
-                                            s, err
-                                        );
+                                        debug!("Disconnect failed {:?}, error: {:?}", s, err);
                                     }
                                 }
                             }

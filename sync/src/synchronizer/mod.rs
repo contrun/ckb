@@ -39,7 +39,7 @@ use ckb_error::Error as CKBError;
 use ckb_logger::{debug, error, info, trace, warn};
 use ckb_network::{
     async_trait, bytes::Bytes, tokio, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    ServiceControl, SupportProtocols, TentacleSessionId,
+    SupportProtocols, TentacleSessionId,
 };
 use ckb_network::{Command, CommandSender};
 use ckb_stop_handler::{new_crossbeam_exit_rx, register_thread};
@@ -49,13 +49,12 @@ use ckb_types::{
     packed::{self, Byte32},
     prelude::*,
 };
-use sled::CompareAndSwapError;
+
 use std::{
     collections::HashSet,
     sync::{atomic::Ordering, Arc},
     time::{Duration, Instant},
 };
-use tokio::sync::mpsc;
 
 pub const SEND_GET_HEADERS_TOKEN: u64 = 0;
 pub const IBD_BLOCK_FETCH_TOKEN: u64 = 1;
@@ -226,9 +225,7 @@ impl BlockFetchCMD {
         let message = packed::SyncMessage::new_builder().set(content).build();
 
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
-        let session_id = match peer {
-            PeerIndex::Tentacle(s) => s,
-        };
+        let PeerIndex::Tentacle(session_id) = peer;
         let status = send_message_with_command_sender(
             command_sender,
             SupportProtocols::Sync,
@@ -318,7 +315,7 @@ impl Synchronizer {
                 "receive {} from {}, ban {:?} for {}",
                 item_name, peer, ban_time, status
             );
-            command_sender.send(Command::Ban {
+            command_sender.must_send(Command::Ban {
                 peer_index: peer,
                 duration: ban_time,
                 reason: status.to_string(),
@@ -669,7 +666,7 @@ impl Synchronizer {
             {
                 continue;
             }
-            command_sender.send(Command::Disconnect {
+            command_sender.must_send(Command::Disconnect {
                 peer_index: *peer,
                 message: "sync disconnect".to_string(),
             });
@@ -834,11 +831,11 @@ impl CKBProtocolHandler for Synchronizer {
         }
 
         let start_time = Instant::now();
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
         tokio::task::block_in_place(move || {
-            let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
             tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
-            nc.process_command_stream(command_receiver);
         });
+        let _ = nc.process_command_stream(command_receiver).await;
         debug!(
             "process message={}, peer={}, cost={:?}",
             msg.item_name(),
@@ -888,7 +885,8 @@ impl CKBProtocolHandler for Synchronizer {
                 let _ = futures::future::join(
                     self.process_notify(command_sender, token),
                     nc.process_command_stream(command_receiver),
-                ).await;
+                )
+                .await;
             }
         };
     }

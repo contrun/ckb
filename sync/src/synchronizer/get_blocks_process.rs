@@ -4,7 +4,7 @@ use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status, StatusCode};
 use ckb_constant::sync::{INIT_BLOCKS_IN_TRANSIT_PER_PEER, MAX_HEADERS_LEN};
 use ckb_logger::debug;
-use ckb_network::{PeerIndex, CommandSender};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{packed, prelude::*};
 use std::collections::HashSet;
 
@@ -75,7 +75,11 @@ impl<'a> GetBlocksProcess<'a> {
                 let content = packed::SendBlock::new_builder().block(block.data()).build();
                 let message = packed::SyncMessage::new_builder().set(content).build();
 
-                attempt!(send_protocol_message_with_command_sender(&self.command_sender, self.peer, &message));
+                attempt!(send_protocol_message_with_command_sender(
+                    &self.command_sender,
+                    self.peer,
+                    &message
+                ));
             } else {
                 // TODO response not found
                 // TODO add timeout check in synchronizer

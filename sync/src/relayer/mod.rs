@@ -47,7 +47,6 @@ use itertools::Itertools;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use tokio::sync::mpsc;
 
 pub const TX_PROPOSAL_TOKEN: u64 = 0;
 pub const ASK_FOR_TXS_TOKEN: u64 = 1;
@@ -218,7 +217,7 @@ impl Relayer {
                 ban_time,
                 status
             );
-            command_sender.send(Command::Ban {
+            command_sender.must_send(Command::Ban {
                 peer_index: peer,
                 duration: ban_time,
                 reason: status.to_string(),
@@ -323,8 +322,8 @@ impl Relayer {
                 .get_connected_peers()
                 .into_iter()
                 .filter(|target_peer| peer != *target_peer)
-                .filter_map(|peer| match peer {
-                    PeerIndex::Tentacle(s) => Some(s),
+                .map(|peer| match peer {
+                    PeerIndex::Tentacle(s) => s,
                 })
                 .take(MAX_RELAY_PEERS)
                 .collect();
@@ -443,7 +442,7 @@ impl Relayer {
             if let Err(e) = fetch_txs {
                 return ReconstructionResult::Error(StatusCode::TxPool.with_context(e));
             }
-            txs_map.extend(fetch_txs.unwrap().into_iter());
+            txs_map.extend(fetch_txs.unwrap());
         }
 
         let txs_len = compact_block.txs_len();
@@ -868,11 +867,11 @@ impl CKBProtocolHandler for Relayer {
         }
 
         let start_time = Instant::now();
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
         tokio::task::block_in_place(move || {
-            let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
             tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
-            nc.process_command_stream(command_receiver);
         });
+        let _ = nc.process_command_stream(command_receiver).await;
         debug_target!(
             crate::LOG_TARGET_RELAY,
             "process message={}, peer={}, cost={:?}",

@@ -7,7 +7,7 @@ use crate::{
     multiaddr::Multiaddr,
     peer_registry::{PeerRegistry, EVICTION_PROTECT_PEERS},
     peer_store::PeerStore,
-    PeerId, SessionType,
+    PeerId, SessionType, TentacleSessionId,
 };
 use std::time::{Duration, Instant};
 
@@ -17,7 +17,7 @@ fn test_accept_inbound_peer_in_reserve_only_mode() {
     let whitelist_addr = format!("/ip4/127.0.0.1/tcp/43/p2p/{}", PeerId::random().to_base58())
         .parse::<Multiaddr>()
         .unwrap();
-    let session_id = 1.into();
+    let session_id = TentacleSessionId::from(1);
 
     // whitelist_only mode: only accept whitelist_peer
     let mut peers = PeerRegistry::new(3, 3, true, vec![whitelist_addr.clone()]);
@@ -53,10 +53,11 @@ fn test_accept_inbound_peer_until_full() {
     // accept node until inbound connections is full
     let mut peers = PeerRegistry::new(3, 3, false, vec![whitelist_addr.clone()]);
     for session_id in 1..=3 {
+        let session_id = TentacleSessionId::from(session_id);
         peers
             .accept_peer(
                 random_addr(),
-                session_id.into(),
+                session_id,
                 SessionType::Inbound,
                 &mut peer_store,
             )
@@ -66,21 +67,24 @@ fn test_accept_inbound_peer_until_full() {
     let err = peers
         .accept_peer(
             random_addr(),
-            3.into(),
+            TentacleSessionId::from(3),
             SessionType::Outbound,
             &mut peer_store,
         )
         .unwrap_err();
     assert_eq!(
         format!("{err}"),
-        format!("{}", Error::Peer(PeerError::SessionExists(3.into()))),
+        format!(
+            "{}",
+            Error::Peer(PeerError::SessionExists(TentacleSessionId::from(3).into()))
+        ),
     );
 
     // test evict a peer
     assert!(peers
         .accept_peer(
             random_addr(),
-            4.into(),
+            TentacleSessionId::from(4),
             SessionType::Inbound,
             &mut peer_store,
         )
@@ -90,7 +94,7 @@ fn test_accept_inbound_peer_until_full() {
     peers
         .accept_peer(
             whitelist_addr.clone(),
-            5.into(),
+            TentacleSessionId::from(5),
             SessionType::Inbound,
             &mut peer_store,
         )
@@ -98,7 +102,7 @@ fn test_accept_inbound_peer_until_full() {
     let err = peers
         .accept_peer(
             whitelist_addr.clone(),
-            6.into(),
+            TentacleSessionId::from(6),
             SessionType::Inbound,
             &mut peer_store,
         )
@@ -140,7 +144,7 @@ fn test_accept_inbound_peer_eviction() {
         assert!(peers_registry
             .accept_peer(
                 random_addr(),
-                session_id.into(),
+                TentacleSessionId::from(session_id),
                 SessionType::Inbound,
                 &mut peer_store,
             )
@@ -207,7 +211,7 @@ fn test_accept_inbound_peer_eviction() {
     peers_registry
         .accept_peer(
             random_addr(),
-            2000.into(),
+            TentacleSessionId::from(2000),
             SessionType::Inbound,
             &mut peer_store,
         )

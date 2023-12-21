@@ -3,7 +3,7 @@ use crate::utils::{send_message_with_command_sender, send_protocol_message_with_
 use crate::{attempt, Status, StatusCode};
 use ckb_constant::sync::MAX_LOCATOR_SIZE;
 use ckb_logger::{debug, info};
-use ckb_network::{PeerIndex, SupportProtocols, CommandSender};
+use ckb_network::{CommandSender, PeerIndex, SupportProtocols};
 use ckb_types::{
     core,
     packed::{self, Byte32},
@@ -85,7 +85,11 @@ impl<'a> GetHeadersProcess<'a> {
                 .build();
             let message = packed::SyncMessage::new_builder().set(content).build();
 
-            attempt!(send_protocol_message_with_command_sender(&self.command_sender, self.peer, &message));
+            attempt!(send_protocol_message_with_command_sender(
+                &self.command_sender,
+                self.peer,
+                &message
+            ));
         } else {
             return StatusCode::GetHeadersMissCommonAncestors
                 .with_context(format!("{block_locator_hashes:#x?}"));
@@ -96,7 +100,11 @@ impl<'a> GetHeadersProcess<'a> {
     fn send_in_ibd(&self) {
         let content = packed::InIBD::new_builder().build();
         let message = packed::SyncMessage::new_builder().set(content).build();
-        let _ignore =
-            send_message_with_command_sender(&self.command_sender, SupportProtocols::Sync, self.peer, &message);
+        let _ignore = send_message_with_command_sender(
+            &self.command_sender,
+            SupportProtocols::Sync,
+            self.peer,
+            &message,
+        );
     }
 }

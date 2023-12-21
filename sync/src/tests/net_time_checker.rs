@@ -63,7 +63,7 @@ impl Node {
 
     fn connected_sessions(&self) -> Vec<SessionId> {
         self.network_state
-            .with_peer_registry(|reg| reg.peers().keys().cloned().collect())
+            .with_peer_registry(|reg| reg.peers().keys().map(Into::into).cloned().collect())
     }
 }
 

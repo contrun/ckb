@@ -15,7 +15,7 @@ use ckb_constant::sync::{
 };
 use ckb_error::Error as CKBError;
 use ckb_logger::{debug, error, trace};
-use ckb_network::{PeerIndex, SupportProtocols, CommandSender};
+use ckb_network::{CommandSender, PeerIndex, SupportProtocols};
 use ckb_shared::{shared::Shared, Snapshot};
 use ckb_store::{ChainDB, ChainStore};
 use ckb_systemtime::unix_time_as_millis;
@@ -42,7 +42,6 @@ use std::{cmp, fmt, iter};
 
 mod header_map;
 
-use crate::utils::send_message;
 use ckb_types::core::{EpochNumber, EpochNumberWithFraction};
 pub use header_map::HeaderMap;
 
@@ -795,10 +794,7 @@ impl InflightBlocks {
                 .insert(block.clone(), unix_time_as_millis());
         }
 
-        let download_scheduler = self
-            .download_schedulers
-            .entry(peer)
-            .or_insert_with(DownloadScheduler::default);
+        let download_scheduler = self.download_schedulers.entry(peer).or_default();
         download_scheduler.hashes.insert(block)
     }
 
@@ -2325,7 +2321,12 @@ impl ActiveChain {
             .hash_stop(packed::Byte32::zero())
             .build();
         let message = packed::SyncMessage::new_builder().set(content).build();
-        let _status = send_message_with_command_sender(command_sender, SupportProtocols::Sync, peer, &message);
+        let _status = send_message_with_command_sender(
+            command_sender,
+            SupportProtocols::Sync,
+            peer,
+            &message,
+        );
     }
 
     pub fn get_block_status(&self, block_hash: &Byte32) -> BlockStatus {
