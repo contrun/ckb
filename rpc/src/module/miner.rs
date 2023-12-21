@@ -339,7 +339,7 @@ impl MinerRpc for MinerRpcImpl {
                 .map(|(id, _)| id)
                 .collect();
             if let Err(err) = self.network_controller.p2p_control().filter_broadcast(
-                TargetSession::Filter(Box::new(move |id| light_client_peers.contains(id))),
+                TargetSession::Filter(Box::new(move |id| light_client_peers.contains(&id.into()))),
                 SupportProtocols::LightClient.protocol_id(),
                 light_client_message.as_bytes(),
             ) {
