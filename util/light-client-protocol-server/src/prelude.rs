@@ -20,7 +20,7 @@ impl<'a> LightClientProtocolReply<'a> for &(dyn CKBProtocolContext + 'a) {
         let enum_message = message.to_enum();
         let item_name = enum_message.item_name();
         let protocol_id = self.protocol_id();
-        if let Err(err) = self.send_message(protocol_id, peer_index, message.as_bytes()) {
+        if let Err(err) = self.send_message(protocol_id, peer_index.into(), message.as_bytes()) {
             let error_message = format!("nc.send_message {item_name} failed since {err:?}");
             StatusCode::Network.with_context(error_message)
         } else {

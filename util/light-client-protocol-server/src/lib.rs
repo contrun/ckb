@@ -61,9 +61,10 @@ impl CKBProtocolHandler for LightClientProtocol {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer: TentacleSessionId,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer = session_id.into();
         trace!("LightClient.received peer={}", peer);
 
         let msg = match packed::LightClientMessageReader::from_slice(&data) {
@@ -83,7 +84,7 @@ impl CKBProtocolHandler for LightClientProtocol {
         };
 
         let item_name = msg.item_name();
-        let status = self.try_process(nc.as_ref(), peer, msg);
+        let status = self.try_process(nc.as_ref(), session_id, msg);
         if let Some(ban_time) = status.should_ban() {
             error!(
                 "process {} from {}, ban {:?} since result is {}",
@@ -102,21 +103,21 @@ impl LightClientProtocol {
     fn try_process(
         &mut self,
         nc: &dyn CKBProtocolContext,
-        peer_index: TentacleSessionId,
+        session_id: TentacleSessionId,
         message: packed::LightClientMessageUnionReader<'_>,
     ) -> Status {
         match message {
             packed::LightClientMessageUnionReader::GetLastState(reader) => {
-                components::GetLastStateProcess::new(reader, self, peer_index, nc).execute()
+                components::GetLastStateProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetLastStateProof(reader) => {
-                components::GetLastStateProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetLastStateProofProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetBlocksProof(reader) => {
-                components::GetBlocksProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetBlocksProofProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetTransactionsProof(reader) => {
-                components::GetTransactionsProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetTransactionsProofProcess::new(reader, self, session_id, nc).execute()
             }
             _ => StatusCode::UnexpectedProtocolMessage.into(),
         }

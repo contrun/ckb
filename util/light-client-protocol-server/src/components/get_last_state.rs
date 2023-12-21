@@ -29,7 +29,7 @@ impl<'a> GetLastStateProcess<'a> {
         let subscribe: bool = self.message.subscribe().unpack();
         if subscribe {
             self.nc.with_peer_mut(
-                self.peer,
+                self.peer.into(),
                 Box::new(|peer| {
                     peer.if_lightclient_subscribed = true;
                 }),
