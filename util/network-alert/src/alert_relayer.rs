@@ -11,6 +11,7 @@ use crate::verifier::Verifier;
 use crate::BAD_MESSAGE_BAN_TIME;
 use ckb_app_config::NetworkAlertConfig;
 use ckb_logger::{debug, info, trace};
+use ckb_network::PeerIndex;
 use ckb_network::{
     async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, TargetSession,
     TentacleSessionId,
@@ -29,7 +30,7 @@ const KNOWN_LIST_SIZE: usize = 64;
 pub struct AlertRelayer {
     notifier: Arc<Mutex<Notifier>>,
     verifier: Arc<Verifier>,
-    known_lists: LruCache<TentacleSessionId, HashSet<u32>>,
+    known_lists: LruCache<PeerIndex, HashSet<u32>>,
 }
 
 impl AlertRelayer {
@@ -62,7 +63,7 @@ impl AlertRelayer {
     }
 
     // return true if it this first time the peer know this alert
-    fn mark_as_known(&mut self, peer: TentacleSessionId, alert_id: u32) -> bool {
+    fn mark_as_known(&mut self, peer: PeerIndex, alert_id: u32) -> bool {
         match self.known_lists.get_mut(&peer) {
             Some(alert_ids) => alert_ids.insert(alert_id),
             None => {
@@ -82,14 +83,14 @@ impl CKBProtocolHandler for AlertRelayer {
     async fn connected(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: TentacleSessionId,
+        session_id: TentacleSessionId,
         _version: &str,
     ) {
         self.clear_expired_alerts();
         for alert in self.notifier.lock().received_alerts() {
             let alert_id: u32 = alert.as_reader().raw().id().unpack();
-            trace!("send alert {} to peer {}", alert_id, peer_index);
-            if let Err(err) = nc.quick_send_message_to(peer_index, alert.as_bytes()) {
+            trace!("send alert {} to peer {}", alert_id, session_id);
+            if let Err(err) = nc.quick_send_message_to(session_id.into(), alert.as_bytes()) {
                 debug!("alert_relayer send alert when connected error: {:?}", err);
             }
         }
@@ -99,9 +100,10 @@ impl CKBProtocolHandler for AlertRelayer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: TentacleSessionId,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = session_id.into();
         let alert: packed::Alert = match packed::AlertReader::from_slice(&data) {
             Ok(alert) => {
                 if alert.raw().message().is_utf8()
@@ -168,6 +170,9 @@ impl CKBProtocolHandler for AlertRelayer {
             .connected_peers()
             .into_iter()
             .filter(|peer| self.mark_as_known(*peer, alert_id))
+            .filter_map(|peer| match peer {
+                PeerIndex::Tentacle(s) => Some(s),
+            })
             .collect();
         if let Err(err) = nc.quick_filter_broadcast(
             TargetSession::Multi(Box::new(selected_peers.into_iter())),
