@@ -12,7 +12,8 @@ use crate::BAD_MESSAGE_BAN_TIME;
 use ckb_app_config::NetworkAlertConfig;
 use ckb_logger::{debug, info, trace};
 use ckb_network::{
-    async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, PeerIndex, TargetSession,
+    async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, TargetSession,
+    TentacleSessionId,
 };
 use ckb_notify::NotifyController;
 use ckb_types::{packed, prelude::*};
@@ -28,7 +29,7 @@ const KNOWN_LIST_SIZE: usize = 64;
 pub struct AlertRelayer {
     notifier: Arc<Mutex<Notifier>>,
     verifier: Arc<Verifier>,
-    known_lists: LruCache<PeerIndex, HashSet<u32>>,
+    known_lists: LruCache<TentacleSessionId, HashSet<u32>>,
 }
 
 impl AlertRelayer {
@@ -61,7 +62,7 @@ impl AlertRelayer {
     }
 
     // return true if it this first time the peer know this alert
-    fn mark_as_known(&mut self, peer: PeerIndex, alert_id: u32) -> bool {
+    fn mark_as_known(&mut self, peer: TentacleSessionId, alert_id: u32) -> bool {
         match self.known_lists.get_mut(&peer) {
             Some(alert_ids) => alert_ids.insert(alert_id),
             None => {
@@ -81,7 +82,7 @@ impl CKBProtocolHandler for AlertRelayer {
     async fn connected(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        peer_index: TentacleSessionId,
         _version: &str,
     ) {
         self.clear_expired_alerts();
@@ -98,7 +99,7 @@ impl CKBProtocolHandler for AlertRelayer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        peer_index: TentacleSessionId,
         data: Bytes,
     ) {
         let alert: packed::Alert = match packed::AlertReader::from_slice(&data) {
@@ -163,7 +164,7 @@ impl CKBProtocolHandler for AlertRelayer {
         // mark sender as known
         self.mark_as_known(peer_index, alert_id);
         // broadcast message
-        let selected_peers: Vec<PeerIndex> = nc
+        let selected_peers: Vec<TentacleSessionId> = nc
             .connected_peers()
             .into_iter()
             .filter(|peer| self.mark_as_known(*peer, alert_id))
