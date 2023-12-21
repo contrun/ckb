@@ -1,8 +1,8 @@
 use crate::relayer::{Relayer, MAX_RELAY_TXS_NUM_PER_BATCH};
-use crate::utils::send_message_to;
+use crate::utils::{send_message_to, send_protocol_message_with_command_sender};
 use crate::{attempt, Status, StatusCode};
 use ckb_logger::debug_target;
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CKBProtocolContext, PeerIndex, CommandSender};
 use ckb_store::ChainStore;
 use ckb_types::{packed, prelude::*};
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 pub struct GetBlockTransactionsProcess<'a> {
     message: packed::GetBlockTransactionsReader<'a>,
     relayer: &'a Relayer,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 }
 
@@ -18,12 +18,12 @@ impl<'a> GetBlockTransactionsProcess<'a> {
     pub fn new(
         message: packed::GetBlockTransactionsReader<'a>,
         relayer: &'a Relayer,
-        nc: Arc<dyn CKBProtocolContext>,
+        command_sender: CommandSender,
         peer: PeerIndex,
     ) -> Self {
         GetBlockTransactionsProcess {
             message,
-            nc,
+            command_sender,
             relayer,
             peer,
         }
@@ -84,7 +84,7 @@ impl<'a> GetBlockTransactionsProcess<'a> {
                 .build();
             let message = packed::RelayMessage::new_builder().set(content).build();
 
-            attempt!(send_message_to(self.nc.as_ref(), self.peer, &message));
+            attempt!(send_protocol_message_with_command_sender(&self.command_sender, self.peer, &message));
         }
 
         Status::ok()

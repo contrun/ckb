@@ -2,12 +2,12 @@ use crate::block_status::BlockStatus;
 use crate::relayer::compact_block_verifier::CompactBlockVerifier;
 use crate::relayer::{ReconstructionResult, Relayer};
 use crate::types::{ActiveChain, HeaderIndex, PendingCompactBlockMap};
-use crate::utils::send_message_to;
+use crate::utils::send_protocol_message_with_command_sender;
 use crate::SyncShared;
 use crate::{attempt, Status, StatusCode};
 use ckb_chain_spec::consensus::Consensus;
 use ckb_logger::{self, debug_target};
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_systemtime::unix_time_as_millis;
 use ckb_traits::{HeaderFields, HeaderFieldsProvider};
 use ckb_types::{
@@ -34,7 +34,7 @@ use std::time::Instant;
 pub struct CompactBlockProcess<'a> {
     message: packed::CompactBlockReader<'a>,
     relayer: &'a Relayer,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 }
 
@@ -42,12 +42,12 @@ impl<'a> CompactBlockProcess<'a> {
     pub fn new(
         message: packed::CompactBlockReader<'a>,
         relayer: &'a Relayer,
-        nc: Arc<dyn CKBProtocolContext>,
+        command_sender: CommandSender,
         peer: PeerIndex,
     ) -> Self {
         CompactBlockProcess {
             message,
-            nc,
+            command_sender,
             relayer,
             peer,
         }
@@ -67,7 +67,13 @@ impl<'a> CompactBlockProcess<'a> {
             return status;
         }
 
-        let status = contextual_check(&header, shared, &active_chain, &self.nc, self.peer);
+        let status = contextual_check(
+            &header,
+            shared,
+            &active_chain,
+            self.command_sender.clone(),
+            self.peer,
+        );
         if !status.is_ok() {
             return status;
         }
@@ -80,7 +86,7 @@ impl<'a> CompactBlockProcess<'a> {
         // Request proposal
         let proposals: Vec<_> = compact_block.proposals().into_iter().collect();
         self.relayer.request_proposal_txs(
-            self.nc.as_ref(),
+            self.command_sender.clone(),
             self.peer,
             (header.number(), block_hash.clone()).into(),
             proposals,
@@ -117,7 +123,7 @@ impl<'a> CompactBlockProcess<'a> {
                 });
                 shrink_to_fit!(pending_compact_blocks, 20);
                 self.relayer
-                    .accept_block(self.nc.as_ref(), self.peer, block);
+                    .accept_block(self.command_sender, self.peer, block);
 
                 if let Some(metrics) = ckb_metrics::handle() {
                     metrics
@@ -142,7 +148,7 @@ impl<'a> CompactBlockProcess<'a> {
                     compact_block,
                     block_hash.clone(),
                     pending_compact_blocks,
-                    self.nc,
+                    self.command_sender,
                     missing_transactions,
                     missing_uncles,
                     self.peer,
@@ -161,7 +167,7 @@ impl<'a> CompactBlockProcess<'a> {
                     compact_block,
                     block_hash.clone(),
                     pending_compact_blocks,
-                    self.nc,
+                    self.command_sender,
                     missing_transactions,
                     missing_uncles,
                     self.peer,
@@ -230,7 +236,7 @@ fn contextual_check(
     compact_block_header: &HeaderView,
     shared: &Arc<SyncShared>,
     active_chain: &ActiveChain,
-    nc: &Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 ) -> Status {
     let block_hash = compact_block_header.hash();
@@ -271,7 +277,7 @@ fn contextual_check(
             block_hash,
             peer
         );
-        active_chain.send_getheaders_to_peer(nc.as_ref(), peer, (&tip).into());
+        active_chain.send_getheaders_to_peer(&command_sender, peer, (&tip).into());
         return StatusCode::CompactBlockRequiresParent.with_context(format!(
             "{} parent: {}",
             block_hash,
@@ -345,7 +351,7 @@ fn missing_or_collided_post_process(
     compact_block: CompactBlock,
     block_hash: Byte32,
     mut pending_compact_blocks: MutexGuard<PendingCompactBlockMap>,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     missing_transactions: Vec<u32>,
     missing_uncles: Vec<u32>,
     peer: PeerIndex,
@@ -362,7 +368,7 @@ fn missing_or_collided_post_process(
         .uncle_indexes(missing_uncles.pack())
         .build();
     let message = packed::RelayMessage::new_builder().set(content).build();
-    let sending = send_message_to(nc.as_ref(), peer, &message);
+    let sending = send_protocol_message_with_command_sender(&command_sender, peer, &message);
     if !sending.is_ok() {
         ckb_logger::warn_target!(
             crate::LOG_TARGET_RELAY,

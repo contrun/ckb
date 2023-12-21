@@ -19,6 +19,7 @@ pub mod peer_store;
 mod services;
 mod support_protocols;
 pub mod tentacle;
+mod command;
 
 #[cfg(test)]
 mod tests;
@@ -35,6 +36,7 @@ pub use crate::{
     peer_store::Score,
     support_protocols::SupportProtocols,
     tentacle::protocols::{identify::Flags, CKBProtocol, CKBProtocolContext, CKBProtocolHandler},
+    command::{Command, CommandSender},
 };
 pub use p2p::{
     async_trait,

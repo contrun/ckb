@@ -19,9 +19,10 @@ use p2p::{
     ProtocolId, SessionId,
 };
 use std::{pin::Pin, sync::Arc, time::Duration};
+use tokio::{select, sync::mpsc};
 use tokio_util::codec::length_delimited;
 
-use crate::PeerIndex;
+use crate::{Command, CommandSender, PeerIndex};
 
 /// Boxed future task
 pub type BoxedFutureTask = Pin<Box<dyn Future<Output = ()> + 'static + Send>>;
@@ -116,8 +117,83 @@ pub trait CKBProtocolContext: Send {
     fn p2p_control(&self) -> Option<&ServiceControl> {
         None
     }
+    async fn process_command(&self, command: Command) {
+        match command {
+            Command::SendMessage {
+                protocol,
+                peer_index,
+                message,
+            } => {
+                let result = self.send_message(protocol.protocol_id(), peer_index, message);
+                match result {
+                    Err(e) => debug!("Failed to send message to peer {}: {:?}", peer_index, e),
+                    Ok(_) => {}
+                };
+            }
+            Command::Ban {
+                peer_index,
+                duration,
+                reason,
+            } => self.ban_peer(peer_index, duration, reason),
+            Command::Disconnect {
+                peer_index,
+                message,
+            } => {
+                let result = self.disconnect(peer_index, &message);
+                match result {
+                    Err(e) => debug!("Failed to disconnect from peer {}: {:?}", peer_index, e),
+                    Ok(_) => {}
+                };
+            }
+            Command::GetPeer { peer_index, sender } => {
+                let result = sender.send(self.get_peer(peer_index));
+                match result {
+                    Err(e) => debug!(
+                        "Failed to send response of get_peer (peer: {}): {:?}",
+                        peer_index, e
+                    ),
+                    Ok(_) => {}
+                };
+            }
+            Command::GetConnectedPeers { sender } => {
+                let result = sender.send(self.connected_peers());
+                match result {
+                    Err(e) => debug!("Failed to send response of get connected peers: {:?}", e),
+                    Ok(_) => {}
+                };
+            }
+            Command::Report {
+                peer_index,
+                behaviour,
+            } => self.report_peer(peer_index, behaviour),
+            Command::FilterBroadCast {
+                // TODO: need to send message to the specific protocol.
+                protocol,
+                target,
+                message,
+                quick,
+            } => {
+                let result = if quick {
+                    self.quick_filter_broadcast(target, message)
+                } else {
+                    self.filter_broadcast(target, message)
+                };
+                match result {
+                    Err(e) => debug!("Failed to send broadcast: {:?}", e),
+                    Ok(_) => {}
+                };
+            }
+        }
+    }
+    async fn process_command_stream(&self, mut stream: mpsc::Receiver<Command>) {
+        loop {
+            select! {
+                Some(command) = stream.recv() => self.process_command(command).await,
+                else => break
+            }
+        }
+    }
 }
-
 /// Abstract protocol handle base on tentacle service handle
 #[async_trait]
 pub trait CKBProtocolHandler: Sync + Send {

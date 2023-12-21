@@ -3,9 +3,11 @@ mod get_block_filter_hashes_process;
 mod get_block_filters_process;
 
 use crate::{types::SyncShared, Status};
+use ckb_network::{Command, CommandSender};
 use get_block_filter_check_points_process::GetBlockFilterCheckPointsProcess;
 use get_block_filter_hashes_process::GetBlockFilterHashesProcess;
 use get_block_filters_process::GetBlockFiltersProcess;
+use tokio::sync::mpsc;
 
 use crate::utils::{metric_ckb_message_bytes, MetricDirection};
 use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
@@ -33,19 +35,19 @@ impl BlockFilter {
 
     fn try_process(
         &mut self,
-        nc: Arc<dyn CKBProtocolContext + Sync>,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::BlockFilterMessageUnionReader<'_>,
     ) -> Status {
         match message {
             packed::BlockFilterMessageUnionReader::GetBlockFilters(msg) => {
-                GetBlockFiltersProcess::new(msg, self, nc, peer).execute()
+                GetBlockFiltersProcess::new(msg, self, command_sender, peer).execute()
             }
             packed::BlockFilterMessageUnionReader::GetBlockFilterHashes(msg) => {
-                GetBlockFilterHashesProcess::new(msg, self, nc, peer).execute()
+                GetBlockFilterHashesProcess::new(msg, self, command_sender, peer).execute()
             }
             packed::BlockFilterMessageUnionReader::GetBlockFilterCheckPoints(msg) => {
-                GetBlockFilterCheckPointsProcess::new(msg, self, nc, peer).execute()
+                GetBlockFilterCheckPointsProcess::new(msg, self, command_sender, peer).execute()
             }
             packed::BlockFilterMessageUnionReader::BlockFilters(_)
             | packed::BlockFilterMessageUnionReader::BlockFilterHashes(_)
@@ -64,13 +66,13 @@ impl BlockFilter {
 
     fn process(
         &mut self,
-        nc: Arc<dyn CKBProtocolContext + Sync>,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::BlockFilterMessageUnionReader<'_>,
     ) {
         let item_name = message.item_name();
         let item_bytes = message.as_slice().len() as u64;
-        let status = self.try_process(Arc::clone(&nc), peer, message);
+        let status = self.try_process(command_sender.clone(), peer, message);
 
         metric_ckb_message_bytes(
             MetricDirection::In,
@@ -89,7 +91,11 @@ impl BlockFilter {
                 ban_time,
                 status
             );
-            nc.ban_peer(peer, ban_time, status.to_string());
+            command_sender.send(Command::Ban {
+                peer_index: peer,
+                duration: ban_time,
+                reason: status.to_string(),
+            });
         } else if status.should_warn() {
             warn_target!(
                 crate::LOG_TARGET_RELAY,
@@ -145,7 +151,11 @@ impl CKBProtocolHandler for BlockFilter {
             peer_index
         );
         let start_time = Instant::now();
-        self.process(nc, peer_index, msg);
+        tokio::task::block_in_place(move || {
+            let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
+            tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
+            nc.process_command_stream(command_receiver);
+        });
         debug_target!(
             crate::LOG_TARGET_FILTER,
             "process message={}, peer={}, cost={:?}",

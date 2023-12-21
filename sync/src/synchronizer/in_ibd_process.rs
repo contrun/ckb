@@ -1,22 +1,22 @@
 use crate::synchronizer::Synchronizer;
 use crate::{Status, StatusCode};
 use ckb_logger::info;
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{Command, PeerIndex, CommandSender};
 
 pub struct InIBDProcess<'a> {
     synchronizer: &'a Synchronizer,
     peer: PeerIndex,
-    nc: &'a dyn CKBProtocolContext,
+    command_sender: CommandSender,
 }
 
 impl<'a> InIBDProcess<'a> {
     pub fn new(
         synchronizer: &'a Synchronizer,
         peer: PeerIndex,
-        nc: &'a dyn CKBProtocolContext,
+        command_sender: CommandSender,
     ) -> Self {
         InIBDProcess {
-            nc,
+            command_sender,
             synchronizer,
             peer,
         }
@@ -34,7 +34,10 @@ impl<'a> InIBDProcess<'a> {
             if state.peer_flags.is_outbound {
                 if state.peer_flags.is_whitelist {
                     self.synchronizer.shared().state().suspend_sync(state);
-                } else if let Err(err) = self.nc.disconnect(self.peer, "outbound in ibd") {
+                } else if let Err(err) = self.command_sender.send(Command::Disconnect {
+                    peer_index: self.peer,
+                    message: "outbound in ibd".to_string(),
+                }) {
                     return StatusCode::Network.with_context(format!("Disconnect error: {err:?}"));
                 }
             } else {
