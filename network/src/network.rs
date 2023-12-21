@@ -175,10 +175,11 @@ impl NetworkState {
     pub(crate) fn ban_session(
         &self,
         p2p_control: &ServiceControl,
-        session_id: SessionId,
+        session_id: impl Into<PeerIndex>,
         duration: Duration,
         reason: String,
     ) {
+        let session_id = session_id.into();
         if let Some(addr) = self.with_peer_registry(|reg| {
             reg.get_peer(session_id)
                 .filter(|peer| !peer.is_whitelist)
@@ -200,15 +201,21 @@ impl NetworkState {
                     duration.as_millis() as u64,
                     reason,
                 );
-                if let Err(err) =
-                    tentacle_disconnect_with_message(p2p_control, peer.session_id, message.as_str())
-                {
-                    debug!("Disconnect failed {:?}, error: {:?}", peer.session_id, err);
+                match peer.index {
+                    PeerIndex::Tentacle(s) => {
+                        if let Err(err) = tentacle_disconnect_with_message(
+                            p2p_control,
+                            s,
+                            message.as_str(),
+                        ) {
+                            debug!("Disconnect failed {:?}, error: {:?}", s, err);
+                        }
+                    }
                 }
             }
         } else {
             debug!(
-                "Ban session({}) failed: not in peer registry or it is in the whitelist",
+                "Ban session({:?}) failed: not in peer registry or it is in the whitelist",
                 session_id
             );
         }
@@ -690,17 +697,21 @@ impl NetworkController {
     /// disconnect peers with matched peer_ip or peer_ip_network, eg: 192.168.0.2 or 192.168.0.0/24
     fn disconnect_peers_in_ip_range(&self, address: IpNetwork, reason: &str) {
         self.tentacle().network_state.with_peer_registry(|reg| {
-            reg.peers().iter().for_each(|(peer_index, peer)| {
-                if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
-                    if address.contains(addr.ip()) {
-                        let _ = tentacle_disconnect_with_message(
-                            self.p2p_control(),
-                            *peer_index,
-                            &format!("Ban peer {}, reason: {}", addr.ip(), reason),
-                        );
+            reg.peers()
+                .iter()
+                .for_each(|(peer_index, peer)| match peer_index {
+                    PeerIndex::Tentacle(peer_index) => {
+                        if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
+                            if address.contains(addr.ip()) {
+                                let _ = tentacle_disconnect_with_message(
+                                    self.p2p_control(),
+                                    *peer_index,
+                                    &format!("Ban peer {}, reason: {}", addr.ip(), reason),
+                                );
+                            }
+                        }
                     }
-                }
-            })
+                })
         });
     }
 

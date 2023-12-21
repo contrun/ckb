@@ -34,7 +34,7 @@ pub struct Peer {
     /// Peer connected time
     pub connected_time: Instant,
     /// Session id
-    pub session_id: SessionId,
+    pub index: PeerIndex,
     /// Session type, Inbound or Outbound
     pub session_type: SessionType,
     /// Opened protocols on this session
@@ -48,7 +48,7 @@ pub struct Peer {
 impl Peer {
     /// Init session info
     pub fn new(
-        session_id: SessionId,
+        index: impl Into<PeerIndex>,
         session_type: SessionType,
         connected_addr: Multiaddr,
         is_whitelist: bool,
@@ -61,7 +61,7 @@ impl Peer {
             last_ping_protocol_message_received_at: None,
             connected_time: Instant::now(),
             is_feeler: false,
-            session_id,
+            index: index.into(),
             session_type,
             protocols: HashMap::with_capacity_and_hasher(1, Default::default()),
             is_whitelist,
@@ -87,5 +87,16 @@ impl Peer {
     /// Opened protocol version
     pub fn protocol_version(&self, protocol_id: ProtocolId) -> Option<ProtocolVersion> {
         self.protocols.get(&protocol_id).cloned()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+pub enum PeerIndex {
+    Tentacle(SessionId),
+}
+
+impl From<SessionId> for PeerIndex {
+    fn from(s: SessionId) -> Self {
+        Self::Tentacle(s)
     }
 }

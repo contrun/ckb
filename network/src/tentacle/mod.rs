@@ -59,7 +59,7 @@ impl EventHandler {
 }
 
 impl EventHandler {
-    fn inbound_eviction(&self) -> Vec<PeerIndex> {
+    fn inbound_eviction(&self) -> Vec<SessionId> {
         if self.network_state.config.bootnode_mode {
             let status = self.network_state.connection_status();
 
@@ -70,7 +70,9 @@ impl EventHandler {
                             .peers()
                             .values()
                             .filter(|peer| peer.is_inbound() && !peer.is_whitelist)
-                            .map(|peer| peer.session_id)
+                            .map(|peer| match peer.index {
+                                PeerIndex::Tentacle(s) => s,
+                            })
                             .collect::<Vec<SessionId>>()
                     })
                     .into_iter()
@@ -227,18 +229,22 @@ impl ServiceHandle for EventHandler {
                     match self.network_state.accept_peer(&session_context) {
                         Ok(Some(evicted_peer)) => {
                             debug!(
-                                "evict peer (disconnect it), {} => {}",
-                                evicted_peer.session_id, evicted_peer.connected_addr,
+                                "evict peer (disconnect it), {:?} => {}",
+                                evicted_peer.index, evicted_peer.connected_addr,
                             );
-                            if let Err(err) = disconnect_with_message(
-                                &control,
-                                evicted_peer.session_id,
-                                "evict because accepted better peer",
-                            ) {
-                                debug!(
-                                    "Disconnect failed {:?}, error: {:?}",
-                                    evicted_peer.session_id, err
-                                );
+                            match evicted_peer.index {
+                                PeerIndex::Tentacle(s) => {
+                                    if let Err(err) = disconnect_with_message(
+                                        &control,
+                                        s,
+                                        "evict because accepted better peer",
+                                    ) {
+                                        debug!(
+                                            "Disconnect failed {:?}, error: {:?}",
+                                            s, err
+                                        );
+                                    }
+                                }
                             }
                         }
                         Ok(None) => debug!(

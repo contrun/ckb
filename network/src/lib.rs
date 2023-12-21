@@ -30,13 +30,11 @@ pub use crate::{
         DefaultExitHandler, ExitHandler, NetworkController, NetworkState, TentacleEventHandler,
         TentacleNetworkService,
     },
-    peer::{Peer, PeerIdentifyInfo},
+    peer::{Peer, PeerIdentifyInfo, PeerIndex},
     peer_registry::PeerRegistry,
     peer_store::Score,
     support_protocols::SupportProtocols,
-    tentacle::protocols::{
-        identify::Flags, CKBProtocol, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    },
+    tentacle::protocols::{identify::Flags, CKBProtocol, CKBProtocolContext, CKBProtocolHandler},
 };
 pub use p2p::{
     async_trait,

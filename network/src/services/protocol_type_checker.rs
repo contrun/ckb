@@ -9,7 +9,8 @@
 ///
 /// Other protocols will be closed after a timeout.
 use crate::{
-    network::tentacle_disconnect_with_message, NetworkState, Peer, ProtocolId, SupportProtocols,
+    network::tentacle_disconnect_with_message, NetworkState, Peer, PeerIndex, ProtocolId,
+    SupportProtocols,
 };
 use ckb_logger::debug;
 use futures::Future;
@@ -95,12 +96,16 @@ impl ProtocolTypeCheckerService {
                         "close peer {:?} due to open protocols error: {}",
                         peer.connected_addr, err
                     );
-                    if let Err(err) = tentacle_disconnect_with_message(
-                        &self.p2p_control,
-                        *session_id,
-                        &format!("open protocols error: {err}"),
-                    ) {
-                        debug!("Disconnect failed {session_id:?}, error: {err:?}");
+                    match peer.index {
+                        PeerIndex::Tentacle(s) => {
+                            if let Err(err) = tentacle_disconnect_with_message(
+                                &self.p2p_control,
+                                s,
+                                &format!("open protocols error: {err}"),
+                            ) {
+                                debug!("Disconnect failed {session_id:?}, error: {err:?}");
+                            }
+                        }
                     }
                 }
             }

@@ -5,11 +5,12 @@ use p2p::{
         TransportErrorKind,
     },
     secio::PeerId,
-    SessionId,
 };
 use std::fmt;
 use std::fmt::Display;
 use std::io::Error as IoError;
+
+use crate::PeerIndex;
 
 /// Alias result on network module
 pub type Result<T> = ::std::result::Result<T, Error>;
@@ -57,7 +58,7 @@ pub enum PeerStoreError {
 #[derive(Debug, Eq, PartialEq)]
 pub enum PeerError {
     /// Session already exists
-    SessionExists(SessionId),
+    SessionExists(PeerIndex),
     /// Peer id exist
     PeerIdExists(PeerId),
     /// Non-reserved peers
