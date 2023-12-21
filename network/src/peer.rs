@@ -108,3 +108,9 @@ impl From<SessionId> for PeerIndex {
         Self::Tentacle(s)
     }
 }
+
+impl From<&SessionId> for PeerIndex {
+    fn from(s: &SessionId) -> Self {
+        Self::Tentacle(*s)
+    }
+}

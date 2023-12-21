@@ -12,6 +12,7 @@ use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
 use ckb_logger::{debug_target, error_target, info_target, warn_target};
 use ckb_network::{
     async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, PeerIndex, SupportProtocols,
+    TentacleSessionId,
 };
 use ckb_types::{packed, prelude::*};
 use std::sync::Arc;
@@ -116,9 +117,10 @@ impl CKBProtocolHandler for BlockFilter {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = session_id.into();
         let msg = match packed::BlockFilterMessageReader::from_compatible_slice(&data) {
             Ok(msg) => msg.to_enum(),
             _ => {
@@ -156,7 +158,7 @@ impl CKBProtocolHandler for BlockFilter {
     async fn connected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        peer_index: TentacleSessionId,
         _version: &str,
     ) {
         info_target!(
@@ -169,7 +171,7 @@ impl CKBProtocolHandler for BlockFilter {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        peer_index: TentacleSessionId,
     ) {
         info_target!(
             crate::LOG_TARGET_FILTER,

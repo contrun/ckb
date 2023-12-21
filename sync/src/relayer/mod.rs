@@ -29,7 +29,7 @@ use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
 use ckb_logger::{debug_target, error_target, info_target, trace_target, warn_target};
 use ckb_network::{
     async_trait, bytes::Bytes, tokio, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    SupportProtocols, TargetSession,
+    SupportProtocols, TargetSession, TentacleSessionId,
 };
 use ckb_systemtime::unix_time_as_millis;
 use ckb_tx_pool::service::TxVerificationResult;
@@ -310,10 +310,13 @@ impl Relayer {
             let cb = packed::CompactBlock::build_from_block(&boxed, &HashSet::new());
             let message = packed::RelayMessage::new_builder().set(cb).build();
 
-            let selected_peers: Vec<PeerIndex> = nc
+            let selected_peers: Vec<_> = nc
                 .connected_peers()
                 .into_iter()
                 .filter(|target_peer| peer != *target_peer)
+                .filter_map(|peer| match peer {
+                    PeerIndex::Tentacle(s) => Some(s),
+                })
                 .take(MAX_RELAY_PEERS)
                 .collect();
             if let Err(err) = nc.quick_filter_broadcast(
@@ -366,7 +369,9 @@ impl Relayer {
                     .map(|(id, _)| id)
                     .collect();
                 if let Err(err) = p2p_control.filter_broadcast(
-                    TargetSession::Filter(Box::new(move |id| light_client_peers.contains(id))),
+                    TargetSession::Filter(Box::new(move |id| {
+                        light_client_peers.contains(&id.into())
+                    })),
                     SupportProtocols::LightClient.protocol_id(),
                     light_client_message.as_bytes(),
                 ) {
@@ -734,7 +739,7 @@ impl Relayer {
                 .build();
             let message = packed::RelayMessage::new_builder().set(content).build();
 
-            if let Err(err) = nc.filter_broadcast(TargetSession::Single(peer), message.as_bytes()) {
+            if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
                 debug_target!(
                     crate::LOG_TARGET_RELAY,
                     "relayer send TransactionHashes error: {:?}",
@@ -766,9 +771,10 @@ impl CKBProtocolHandler for Relayer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = session_id.into();
         // If self is in the IBD state, don't process any relayer message.
         if self.shared.active_chain().is_initial_block_download() {
             return;
@@ -865,9 +871,10 @@ impl CKBProtocolHandler for Relayer {
     async fn connected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         version: &str,
     ) {
+        let peer_index = session_id.into();
         self.shared().state().peers().relay_connected(peer_index);
         info_target!(
             crate::LOG_TARGET_RELAY,
@@ -880,12 +887,12 @@ impl CKBProtocolHandler for Relayer {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
     ) {
         info_target!(
             crate::LOG_TARGET_RELAY,
             "RelayProtocol.disconnected peer={}",
-            peer_index
+            session_id
         );
         // Retains all keys in the rate limiter that were used recently enough.
         self.rate_limiter.lock().retain_recent();

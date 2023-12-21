@@ -36,7 +36,7 @@ use ckb_error::Error as CKBError;
 use ckb_logger::{debug, error, info, trace, warn};
 use ckb_network::{
     async_trait, bytes::Bytes, tokio, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    ServiceControl, SupportProtocols,
+    ServiceControl, SupportProtocols, TentacleSessionId,
 };
 use ckb_stop_handler::{new_crossbeam_exit_rx, register_thread};
 use ckb_systemtime::unix_time_as_millis;
@@ -216,8 +216,11 @@ impl BlockFetchCMD {
         let message = packed::SyncMessage::new_builder().set(content).build();
 
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
+        let session_id = match peer {
+            PeerIndex::Tentacle(s) => s,
+        };
         if let Err(err) = nc.send_message_to(
-            peer,
+            session_id,
             SupportProtocols::Sync.protocol_id(),
             message.as_bytes(),
         ) {
@@ -712,9 +715,10 @@ impl CKBProtocolHandler for Synchronizer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = session_id.into();
         let msg = match packed::SyncMessageReader::from_compatible_slice(&data) {
             Ok(msg) => {
                 let item = msg.to_enum();
@@ -794,9 +798,10 @@ impl CKBProtocolHandler for Synchronizer {
     async fn connected(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         _version: &str,
     ) {
+        let peer_index = session_id.into();
         info!("SyncProtocol.connected peer={}", peer_index);
         self.on_connected(nc.as_ref(), peer_index);
     }
@@ -804,8 +809,9 @@ impl CKBProtocolHandler for Synchronizer {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
     ) {
+        let peer_index = session_id.into();
         let sync_state = self.shared().state();
         sync_state.disconnected(peer_index);
     }
