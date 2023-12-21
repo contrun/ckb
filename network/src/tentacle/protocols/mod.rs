@@ -46,13 +46,13 @@ pub trait CKBProtocolContext: Send {
     async fn async_quick_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error>;
     /// Send message through quick queue
     async fn async_quick_send_message_to(
         &self,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error>;
     /// Filter broadcast message through quick queue
@@ -65,51 +65,51 @@ pub trait CKBProtocolContext: Send {
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error>;
     /// Send message
-    async fn async_send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error>;
+    async fn async_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error>;
     /// Filter broadcast message
     async fn async_filter_broadcast(&self, target: TargetSession, data: Bytes)
         -> Result<(), Error>;
     /// Disconnect session
-    async fn async_disconnect(&self, peer_index: SessionId, message: &str) -> Result<(), Error>;
+    async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error>;
     /// Send message through quick queue
     fn quick_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error>;
     /// Send message through quick queue
-    fn quick_send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error>;
+    fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error>;
     /// Filter broadcast message through quick queue
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error>;
     /// Send message
     fn send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error>;
     /// Send message
-    fn send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error>;
+    fn send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error>;
     /// Filter broadcast message
     fn filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error>;
     /// Disconnect session
-    fn disconnect(&self, peer_index: SessionId, message: &str) -> Result<(), Error>;
+    fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error>;
     // Interact with NetworkState
     /// Get peer info
-    fn get_peer(&self, peer_index: SessionId) -> Option<Peer>;
+    fn get_peer(&self, peer_index: PeerIndex) -> Option<Peer>;
     /// Modify peer info
-    fn with_peer_mut(&self, peer_index: SessionId, f: Box<dyn FnOnce(&mut Peer)>);
+    fn with_peer_mut(&self, peer_index: PeerIndex, f: Box<dyn FnOnce(&mut Peer)>);
     /// Get all session id
-    fn connected_peers(&self) -> Vec<SessionId>;
+    fn connected_peers(&self) -> Vec<PeerIndex>;
     /// Report peer behavior
-    fn report_peer(&self, peer_index: SessionId, behaviour: Behaviour);
+    fn report_peer(&self, peer_index: PeerIndex, behaviour: Behaviour);
     /// Ban peer
-    fn ban_peer(&self, peer_index: SessionId, duration: Duration, reason: String);
+    fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String);
     /// current protocol id
     fn protocol_id(&self) -> ProtocolId;
     /// Raw tentacle controller
@@ -409,23 +409,26 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     async fn async_quick_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
-            "[send message]: {}, to={}, length={}",
+            "[send message]: {}, to={:?}, length={}",
             proto_id,
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.async_p2p_control
-            .quick_send_message_to(peer_index, proto_id, data)
+            .quick_send_message_to(session_id, proto_id, data)
             .await?;
         Ok(())
     }
     async fn async_quick_send_message_to(
         &self,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
@@ -434,8 +437,11 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.async_p2p_control
-            .quick_send_message_to(peer_index, self.proto_id, data)
+            .quick_send_message_to(session_id, self.proto_id, data)
             .await?;
         Ok(())
     }
@@ -452,7 +458,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     async fn async_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
@@ -461,20 +467,26 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.async_p2p_control
-            .send_message_to(peer_index, proto_id, data)
+            .send_message_to(session_id, proto_id, data)
             .await?;
         Ok(())
     }
-    async fn async_send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error> {
+    async fn async_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
             "[send message to]: {}, to={}, length={}",
             self.proto_id,
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.async_p2p_control
-            .send_message_to(peer_index, self.proto_id, data)
+            .send_message_to(session_id, self.proto_id, data)
             .await?;
         Ok(())
     }
@@ -488,16 +500,19 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             .await?;
         Ok(())
     }
-    async fn async_disconnect(&self, peer_index: SessionId, message: &str) -> Result<(), Error> {
+    async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        tentacle_async_disconnect_with_message(&self.async_p2p_control, peer_index, message)
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
+        tentacle_async_disconnect_with_message(&self.async_p2p_control, session_id, message)
             .await?;
         Ok(())
     }
     fn quick_send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
@@ -506,19 +521,25 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.p2p_control
-            .quick_send_message_to(peer_index, proto_id, data)?;
+            .quick_send_message_to(session_id, proto_id, data)?;
         Ok(())
     }
-    fn quick_send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error> {
+    fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
             "[send message to]: {}, to={}, length={}",
             self.proto_id,
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.p2p_control
-            .quick_send_message_to(peer_index, self.proto_id, data)?;
+            .quick_send_message_to(session_id, self.proto_id, data)?;
         Ok(())
     }
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
@@ -529,7 +550,7 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     fn send_message(
         &self,
         proto_id: ProtocolId,
-        peer_index: SessionId,
+        peer_index: PeerIndex,
         data: Bytes,
     ) -> Result<(), Error> {
         trace!(
@@ -538,19 +559,25 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.p2p_control
-            .send_message_to(peer_index, proto_id, data)?;
+            .send_message_to(session_id, proto_id, data)?;
         Ok(())
     }
-    fn send_message_to(&self, peer_index: SessionId, data: Bytes) -> Result<(), Error> {
+    fn send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
             "[send message to]: {}, to={}, length={}",
             self.proto_id,
             peer_index,
             data.len()
         );
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.p2p_control
-            .send_message_to(peer_index, self.proto_id, data)?;
+            .send_message_to(session_id, self.proto_id, data)?;
         Ok(())
     }
     fn filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
@@ -558,31 +585,32 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             .filter_broadcast(target, self.proto_id, data)?;
         Ok(())
     }
-    fn disconnect(&self, peer_index: SessionId, message: &str) -> Result<(), Error> {
+    fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        tentacle_disconnect_with_message(&self.p2p_control, peer_index, message)?;
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
+        tentacle_disconnect_with_message(&self.p2p_control, session_id, message)?;
         Ok(())
     }
 
-    fn get_peer(&self, peer_index: SessionId) -> Option<Peer> {
+    fn get_peer(&self, peer_index: PeerIndex) -> Option<Peer> {
         self.network_state
             .with_peer_registry(|reg| reg.get_peer(peer_index).cloned())
     }
-    fn with_peer_mut(&self, peer_index: SessionId, f: Box<dyn FnOnce(&mut Peer)>) {
+    fn with_peer_mut(&self, peer_index: PeerIndex, f: Box<dyn FnOnce(&mut Peer)>) {
         self.network_state.with_peer_registry_mut(|reg| {
             reg.get_peer_mut(peer_index).map(f);
         })
     }
 
-    fn connected_peers(&self) -> Vec<SessionId> {
+    fn connected_peers(&self) -> Vec<PeerIndex> {
         self.network_state.with_peer_registry(|reg| {
             reg.peers()
                 .iter()
                 .filter_map(|(peer_index, peer)| {
                     if peer.protocols.contains_key(&self.proto_id) {
-                        match peer_index {
-                            PeerIndex::Tentacle(s) => Some(*s),
-                        }
+                        Some(*peer_index)
                     } else {
                         None
                     }
@@ -590,13 +618,19 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
                 .collect()
         })
     }
-    fn report_peer(&self, peer_index: SessionId, behaviour: Behaviour) {
+    fn report_peer(&self, peer_index: PeerIndex, behaviour: Behaviour) {
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.network_state
-            .report_session(&self.p2p_control, peer_index, behaviour);
+            .report_session(&self.p2p_control, session_id, behaviour);
     }
-    fn ban_peer(&self, peer_index: SessionId, duration: Duration, reason: String) {
+    fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
+        let session_id = match peer_index {
+            PeerIndex::Tentacle(s) => s,
+        };
         self.network_state
-            .ban_session(&self.p2p_control, peer_index, duration, reason);
+            .ban_session(&self.p2p_control, session_id, duration, reason);
     }
 
     fn protocol_id(&self) -> ProtocolId {

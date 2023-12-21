@@ -95,6 +95,14 @@ pub enum PeerIndex {
     Tentacle(SessionId),
 }
 
+impl std::fmt::Display for PeerIndex {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Self::Tentacle(s) => write!(f, "{}", s),
+        }
+    }
+}
+
 impl From<SessionId> for PeerIndex {
     fn from(s: SessionId) -> Self {
         Self::Tentacle(s)
