@@ -44,7 +44,7 @@ pub use p2p::{
     service::{ServiceControl, SessionType, TargetProtocol, TargetSession},
     traits::ServiceProtocol,
     utils::{extract_peer_id, multiaddr_to_socketaddr},
-    ProtocolId, SessionId,
+    ProtocolId, SessionId, SessionId as TentacleSessionId,
 };
 pub use tokio;
 
