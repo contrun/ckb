@@ -250,6 +250,9 @@ impl NetworkController {
             .with_tcp(
                 tcp::Config::default(),
                 noise::Config::new,
+                // According to the comment, https://github.com/contrun/ckb/commit/0567f1a203fae9c7389109de93864cfb20cb9f80#r135680667
+                // The default config is not optimal.
+                // TODO: Do some benchmark and change this parameter.
                 yamux::Config::default,
             )
             .expect("Create tcp transport")
