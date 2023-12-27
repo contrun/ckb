@@ -9,7 +9,7 @@ use crate::{
         Behaviour, Multiaddr, PeerScoreConfig, ReportResult, Status, ADDR_COUNT_LIMIT,
         ADDR_TIMEOUT_MS, ADDR_TRY_TIMEOUT_MS, DIAL_INTERVAL,
     },
-    Flags, PeerId, SessionType,
+    Flags, PeerId,
 };
 use ipnetwork::IpNetwork;
 use rand::prelude::IteratorRandom;
@@ -39,8 +39,7 @@ impl PeerStore {
     }
 
     /// this method will assume peer is connected, which implies address is "verified".
-    pub fn add_connected_peer(&mut self, addr: Multiaddr, session_type: SessionType) {
-        let now_ms = ckb_systemtime::unix_time_as_millis();
+    pub fn add_connected_peer(&mut self, addr: Multiaddr) {
         match self
             .connected_peers
             .entry(extract_peer_id(&addr).expect("connected addr should have peer id"))
@@ -48,11 +47,9 @@ impl PeerStore {
             Entry::Occupied(mut entry) => {
                 let peer = entry.get_mut();
                 peer.connected_addr = addr;
-                peer.last_connected_at_ms = now_ms;
-                peer.session_type = session_type;
             }
             Entry::Vacant(entry) => {
-                let peer = PeerInfo::new(addr, session_type, now_ms);
+                let peer = PeerInfo::new(addr);
                 entry.insert(peer);
             }
         }

@@ -110,7 +110,7 @@ impl PeerRegistry {
                 return Err(PeerError::ReachMaxOutboundLimit.into());
             }
         }
-        peer_store.add_connected_peer(remote_addr.clone(), session_type);
+        peer_store.add_connected_peer(remote_addr.clone());
         let peer = Peer::new(index, session_type, remote_addr, is_whitelist);
         self.peers.insert(index, peer);
         Ok(evicted_peer)
