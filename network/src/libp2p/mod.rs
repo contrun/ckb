@@ -19,13 +19,17 @@ use libp2p::{
 use serde::{Deserialize, Serialize};
 
 use ckb_spawn::Spawn;
-use tokio::sync::mpsc;
+use tokio::{select, sync::mpsc, time};
 
 use futures::StreamExt;
 use std::sync::Arc;
 
 pub use libp2p::Multiaddr;
 pub use libp2p::PeerId;
+
+use self::sync::{SyncRequest, SyncResponse};
+
+mod sync;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct DisconnectMessageRequest(String);
@@ -39,12 +43,14 @@ struct MyBehaviour {
     disconnect_message: Toggle<
         request_response::cbor::Behaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
     >,
+    sync: Toggle<request_response::cbor::Behaviour<SyncRequest, SyncResponse>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum Command {
     Dial { multiaddr: Multiaddr },
     Disconnect { peer: PeerId, message: String },
+    GetHeader,
 }
 
 pub enum Event {}
@@ -184,6 +190,9 @@ impl NetworkService {
                     peer, request_id
                 );
             }
+            Command::GetHeader => {
+                todo!("GetHeader here");
+            }
         }
     }
 }
@@ -245,6 +254,20 @@ impl NetworkController {
             None
         });
 
+        let sync_supported = supported_protocols.contains(&SupportProtocols::Sync);
+        let sync_behaviour = Toggle::from(if sync_supported {
+            Some(request_response::cbor::Behaviour::new(
+                [(
+                    StreamProtocol::try_from_owned(SupportProtocols::Sync.name())
+                        .expect("Protocol of Sync name start with /"),
+                    ProtocolSupport::Full,
+                )],
+                request_response::Config::default(),
+            ))
+        } else {
+            None
+        });
+
         let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
             .with_tokio()
             .with_tcp(
@@ -263,6 +286,7 @@ impl NetworkController {
                 )),
                 ping: ping_behaviour,
                 disconnect_message: disconenct_message_behaviour,
+                sync: sync_behaviour,
             })
             .expect("Create behaviour")
             .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(3600)))
@@ -293,6 +317,17 @@ impl NetworkController {
             );
             service.run().await;
         });
+        if sync_supported {
+            let command_sender = command_sender.clone();
+            let mut interval = time::interval(Duration::from_millis(10));
+            handle.spawn_task(async move {
+                select! {
+                    _ = interval.tick() => {
+                        command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
+                    },
+                }
+            });
+        }
         Ok(NetworkController {
             handle: handle.clone(),
             network_state,
