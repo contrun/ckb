@@ -41,14 +41,15 @@ pub use crate::{
 pub use p2p::{
     async_trait,
     builder::ServiceBuilder,
-    bytes, multiaddr,
-    secio::{PeerId, PublicKey},
+    bytes, multiaddr::{self, MultiAddr as TentacleMultiaddr},
+    secio::{PeerId as TentaclePeerId, PublicKey as TentaclePublicKey},
     service::{ServiceControl, SessionType, TargetProtocol, TargetSession},
     traits::ServiceProtocol,
     utils::{extract_peer_id, multiaddr_to_socketaddr},
     ProtocolId, SessionId, SessionId as TentacleSessionId,
 };
 pub use tokio;
+pub use crate::peer::{Multiaddr, PeerId};
 
 /// Protocol version used by network protocol open
 pub type ProtocolVersion = String;

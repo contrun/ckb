@@ -1,16 +1,17 @@
 //! Peer registry
 use crate::peer_store::PeerStore;
-use crate::PeerIndex;
 use crate::{
     errors::{Error, PeerError},
-    extract_peer_id, Peer, PeerId, SessionType,
+    Peer, PeerId, SessionType, TentaclePeerId,
 };
+use crate::{Multiaddr, PeerIndex};
 use ckb_logger::debug;
-use p2p::{multiaddr::Multiaddr, SessionId};
+use core::panic;
+use libp2p::{identify::Info as Libp2pIdentifyInfo, PeerId as Libp2pPeerId};
+use p2p::SessionId;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
-
 pub(crate) const EVICTION_PROTECT_PEERS: usize = 8;
 
 /// Memory records of opened session information
@@ -61,7 +62,10 @@ impl PeerRegistry {
     ) -> Self {
         PeerRegistry {
             peers: HashMap::with_capacity_and_hasher(20, Default::default()),
-            whitelist_peers: whitelist_peers.iter().filter_map(extract_peer_id).collect(),
+            whitelist_peers: whitelist_peers
+                .iter()
+                .filter_map(|a| PeerId::try_from(a).map(Into::into).ok())
+                .collect(),
             feeler_peers: HashSet::default(),
             max_inbound,
             max_outbound,
@@ -80,12 +84,15 @@ impl PeerRegistry {
         if self.peers.contains_key(&index) {
             return Err(PeerError::SessionExists(index).into());
         }
-        let peer_id = extract_peer_id(&remote_addr).expect("opened session should have peer id");
+        let peer_id = match PeerId::try_from(&remote_addr) {
+            Ok(PeerId::Tentacle(peer_id)) => peer_id,
+            _ => panic!("opened session should have peer id"),
+        };
         if self.get_key_by_peer_id(&peer_id).is_some() {
             return Err(PeerError::PeerIdExists(peer_id).into());
         }
 
-        let is_whitelist = self.whitelist_peers.contains(&peer_id);
+        let is_whitelist = self.whitelist_peers.contains(&peer_id.into());
         let mut evicted_peer: Option<Peer> = None;
 
         if !is_whitelist {
@@ -114,6 +121,25 @@ impl PeerRegistry {
         let peer = Peer::new(index, session_type, remote_addr, is_whitelist);
         self.peers.insert(index, peer);
         Ok(evicted_peer)
+    }
+
+    pub(crate) fn accept_libp2p_peer(
+        &mut self,
+        peer_id: Libp2pPeerId,
+        info: Libp2pIdentifyInfo,
+        peer_store: &mut PeerStore,
+    ) -> Result<(), Error> {
+        let index = peer_id.into();
+        if self.peers.contains_key(&index) {
+            return Err(PeerError::SessionExists(index).into());
+        }
+        // TODO: Some security mitigations are not implemented for libp2p,
+        // accept_peer for tentacle above
+
+        // peer_store.add_connected_peer(remote_addr.clone());
+        // let peer = Peer::new(index, session_type, remote_addr, is_whitelist);
+        // self.peers.insert(index, peer);
+        Ok(())
     }
 
     // try to evict an inbound peer
@@ -190,21 +216,21 @@ impl PeerRegistry {
 
     /// Add feeler dail task
     pub fn add_feeler(&mut self, addr: &Multiaddr) {
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.feeler_peers.insert(peer_id);
         }
     }
 
     /// Remove feeler dail task on session disconnects or fails
     pub fn remove_feeler(&mut self, addr: &Multiaddr) {
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.feeler_peers.remove(&peer_id);
         }
     }
 
     /// Whether this session is feeler session
     pub fn is_feeler(&self, addr: &Multiaddr) -> bool {
-        extract_peer_id(addr)
+        PeerId::try_from(addr)
             .map(|peer_id| self.feeler_peers.contains(&peer_id))
             .unwrap_or_default()
     }
@@ -227,17 +253,17 @@ impl PeerRegistry {
     }
 
     /// Get session id by peer id
-    pub fn get_key_by_peer_id(&self, peer_id: &PeerId) -> Option<SessionId> {
+    pub fn get_key_by_peer_id(&self, peer_id: &TentaclePeerId) -> Option<SessionId> {
         self.peers.iter().find_map(|(session_id, peer)| {
-            extract_peer_id(&peer.connected_addr).and_then(|pid| {
-                if &pid == peer_id {
-                    match session_id {
+            PeerId::try_from(&peer.connected_addr)
+                .ok()
+                .and_then(|pid| match pid {
+                    PeerId::Tentacle(pid) if &pid == peer_id => match session_id {
                         PeerIndex::Tentacle(s) => Some(*s),
-                    }
-                } else {
-                    None
-                }
-            })
+                        _ => panic!("Expect to get a session id for peer"),
+                    },
+                    _ => None,
+                })
         })
     }
 
@@ -251,8 +277,9 @@ impl PeerRegistry {
         self.peers
             .keys()
             .cloned()
-            .map(|index| match index {
-                PeerIndex::Tentacle(s) => s,
+            .filter_map(|index| match index {
+                PeerIndex::Tentacle(s) => Some(s),
+                PeerIndex::Libp2p(_) => None,
             })
             .collect()
     }

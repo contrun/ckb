@@ -6,6 +6,7 @@ pub use super::tentacle::NetworkService as TentacleNetworkService;
 
 use crate::errors::Error;
 use crate::libp2p;
+
 use crate::peer_registry::{ConnectionStatus, PeerRegistry};
 use crate::peer_store::{
     types::{AddrInfo, BannedAddr},
@@ -15,7 +16,10 @@ use crate::tentacle;
 use crate::tentacle::protocols::identify::Flags;
 use crate::SupportProtocols;
 
-use crate::{Behaviour, Peer, PeerIndex, ProtocolId, ServiceControl};
+use crate::{
+    Behaviour, Multiaddr, Peer, PeerId, PeerIndex, ProtocolId, ServiceControl, TentacleMultiaddr,
+    TentaclePeerId,
+};
 use ckb_app_config::NetworkConfig;
 use ckb_logger::{debug, error, info, trace, warn};
 
@@ -26,8 +30,8 @@ use p2p::{
     bytes::Bytes,
     context::SessionContext,
     error::SendErrorKind,
-    multiaddr::{Multiaddr, Protocol},
-    secio::{self, PeerId},
+    multiaddr::Protocol,
+    secio::{self},
     service::{TargetProtocol, TargetSession},
     utils::{extract_peer_id, is_reachable, multiaddr_to_socketaddr},
     SessionId,
@@ -99,18 +103,19 @@ impl NetworkState {
                         Some(addr)
                     })
             })
+            .map(Into::into)
             .collect();
         info!("loading the peer store, which may take a few seconds to complete");
         let peer_store = Mutex::new(PeerStore::load_from_dir_or_default(
             config.peer_store_path(),
         ));
-        let bootnodes = config.bootnodes();
+        let bootnodes = config.bootnodes().into_iter().map(Into::into).collect();
 
         let peer_registry = PeerRegistry::new(
             config.max_inbound_peers(),
             config.max_outbound_peers(),
             config.whitelist_only,
-            config.whitelist_peers(),
+            config.whitelist_peers().iter().map(Into::into).collect(),
         );
 
         Ok(NetworkState {
@@ -123,7 +128,7 @@ impl NetworkState {
             listened_addrs: RwLock::new(Vec::new()),
             pending_observed_addrs: RwLock::new(HashSet::default()),
             local_private_key,
-            local_peer_id,
+            local_peer_id: local_peer_id.into(),
             active: AtomicBool::new(true),
             protocols: RwLock::new(Vec::new()),
             required_flags: Flags::SYNC | Flags::DISCOVERY | Flags::RELAY,
@@ -172,12 +177,11 @@ impl NetworkState {
         }
     }
 
-    pub(crate) fn ban_session(
+    pub(crate) fn remove_peer_from_registry(
         &self,
-        p2p_control: &ServiceControl,
         session_id: impl Into<PeerIndex>,
         duration: Duration,
-        reason: String,
+        reason: &str,
     ) {
         let session_id = session_id.into();
         if let Some(addr) = self.with_peer_registry(|reg| {
@@ -195,21 +199,11 @@ impl NetworkState {
                 metrics.ckb_network_ban_peer.inc();
             }
             if let Some(peer) = self.with_peer_registry_mut(|reg| reg.remove_peer(session_id)) {
-                let message = format!("Ban for {} seconds, reason: {}", duration.as_secs(), reason);
                 self.peer_store.lock().ban_addr(
                     &peer.connected_addr,
                     duration.as_millis() as u64,
                     reason,
                 );
-                match peer.index {
-                    PeerIndex::Tentacle(s) => {
-                        if let Err(err) =
-                            tentacle_disconnect_with_message(p2p_control, s, message.as_str())
-                        {
-                            debug!("Disconnect failed {:?}, error: {:?}", s, err);
-                        }
-                    }
-                }
             }
         } else {
             debug!(
@@ -217,6 +211,22 @@ impl NetworkState {
                 session_id
             );
         }
+    }
+
+    pub(crate) fn ban_session(
+        &self,
+        p2p_control: &ServiceControl,
+        session_id: SessionId,
+        duration: Duration,
+        reason: &str,
+    ) {
+        self.remove_peer_from_registry(session_id, duration, reason);
+        let message: String = format!("Ban for {} seconds, reason: {}", duration.as_secs(), reason);
+        if let Err(err) =
+            tentacle_disconnect_with_message(p2p_control, session_id, message.as_str())
+        {
+            debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
+        };
     }
 
     pub(crate) fn accept_peer(
@@ -228,7 +238,7 @@ impl NetworkState {
         let mut peer_store = self.peer_store.lock();
         let accept_peer_result = {
             self.peer_registry.write().accept_peer(
-                session_context.address.clone(),
+                session_context.address.clone().into(),
                 session_context.id,
                 session_context.ty,
                 &mut peer_store,
@@ -273,7 +283,7 @@ impl NetworkState {
 
     /// Get local node's peer id in base58 format string
     pub fn node_id(&self) -> String {
-        self.local_peer_id().to_base58()
+        TentaclePeerId::from(self.local_peer_id()).to_base58()
     }
 
     pub(crate) fn public_addrs(&self, count: usize) -> Vec<Multiaddr> {
@@ -302,7 +312,9 @@ impl NetworkState {
                 }
             })
             .chain(listened_addrs.iter().map(|addr| (addr.to_owned(), 1)))
-            .map(|(addr, score)| (addr.to_string(), score))
+            .map(|(addr, score)| 
+            // TODO: We need also to consider libp2p address here
+            (TentacleMultiaddr::from(addr).to_string(), score))
             .collect()
     }
 
@@ -320,37 +332,47 @@ impl NetworkState {
     }
 
     pub(crate) fn can_dial(&self, addr: &Multiaddr) -> bool {
-        let peer_id = extract_peer_id(addr);
-        if peer_id.is_none() {
-            error!("Do not dial addr without peer id, addr: {}", addr);
+        let peer_id = PeerId::try_from(addr);
+        if let Err(error) = peer_id {
+            error!(
+                "Do not dial addr without peer id, addr: {:?}, error: {}",
+                addr, error
+            );
             return false;
         }
         let peer_id = peer_id.as_ref().unwrap();
 
         if self.local_peer_id() == peer_id {
-            trace!("Do not dial self: {:?}, {}", peer_id, addr);
+            trace!("Do not dial self: {:?}, {:?}", peer_id, addr);
             return false;
         }
         if self.public_addrs.read().contains(addr) {
             trace!(
-                "Do not dial listened address(self): {:?}, {}",
+                "Do not dial listened address(self): {:?}, {:?}",
                 peer_id,
                 addr
             );
             return false;
         }
 
-        let peer_in_registry = self.with_peer_registry(|reg| {
-            reg.get_key_by_peer_id(peer_id).is_some() || reg.is_feeler(addr)
-        });
-        if peer_in_registry {
-            trace!("Do not dial peer in registry: {:?}, {}", peer_id, addr);
-            return false;
+        // Tentacle specific logic to check if we have already connnected to peer. 
+        match peer_id {
+            PeerId::Tentacle(peer_id) => {
+                let peer_in_registry = self.with_peer_registry(|reg| {
+                    reg.get_key_by_peer_id(peer_id).is_some() || reg.is_feeler(&addr)
+                });
+                if peer_in_registry {
+                    trace!("Do not dial peer in registry: {:?}, {:?}", peer_id, addr);
+                    return false;
+                }
+        
+            },
+            _ =>  {}
         }
 
         if let Some(dial_started) = self.dialing_addrs.read().get(peer_id) {
             trace!(
-                "Do not repeat send dial command to network service: {:?}, {}",
+                "Do not repeat send dial command to network service: {:?}, {:?}",
                 peer_id,
                 addr
             );
@@ -379,17 +401,17 @@ impl NetworkState {
     }
 
     pub(crate) fn dial_success(&self, addr: &Multiaddr) {
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.dialing_addrs.write().remove(&peer_id);
         }
     }
 
     pub(crate) fn dial_failed(&self, addr: &Multiaddr) {
         self.with_peer_registry_mut(|reg| {
-            reg.remove_feeler(addr);
+            reg.remove_feeler(&addr);
         });
 
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.dialing_addrs.write().remove(&peer_id);
         }
     }
@@ -403,13 +425,13 @@ impl NetworkState {
         target: TargetProtocol,
     ) -> Result<(), Error> {
         if !self.can_dial(&addr) {
-            return Err(Error::Dial(format!("ignore dialing addr {addr}")));
+            return Err(Error::Dial(format!("ignore dialing addr {:?}", addr)));
         }
 
-        debug!("dialing {addr}");
-        p2p_control.dial(addr.clone(), target)?;
+        debug!("dialing {:?}", addr);
+        p2p_control.dial(TentacleMultiaddr::from(&addr), target)?;
         self.dialing_addrs.write().insert(
-            extract_peer_id(&addr).expect("verified addr"),
+            PeerId::try_from(addr).expect("verified addr"),
             Instant::now(),
         );
         Ok(())
@@ -436,7 +458,7 @@ impl NetworkState {
             debug!("dial_feeler error {err}");
         } else {
             self.with_peer_registry_mut(|reg| {
-                reg.add_feeler(&addr);
+                reg.add_feeler(&addr.into());
             });
         }
     }
@@ -452,7 +474,7 @@ impl NetworkState {
             // random get addr
             if let Some(addr) = addrs.iter().choose(&mut rand::thread_rng()) {
                 if let Err(err) = p2p_control.dial(
-                    addr.clone(),
+                    TentacleMultiaddr::from(addr),
                     TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
                 ) {
                     trace!("try_dial_observed_addrs fail {err} on public address")
@@ -462,7 +484,7 @@ impl NetworkState {
             for addr in pending_observed_addrs.drain() {
                 trace!("try dial observed addr: {:?}", addr);
                 if let Err(err) = p2p_control.dial(
-                    addr,
+                    TentacleMultiaddr::from(addr),
                     TargetProtocol::Single(SupportProtocols::Identify.protocol_id()),
                 ) {
                     trace!("try_dial_observed_addrs fail {err} on pending observed")
@@ -521,27 +543,38 @@ impl NetworkController {
         tentacle: Option<tentacle::NetworkController>,
         libp2p: Option<libp2p::NetworkController>,
     ) -> Self {
+        if tentacle.is_none() && libp2p.is_none() {
+            panic!("Expect tentacle or libp2p network controller to be present.")
+        }
         Self { tentacle, libp2p }
     }
 
-    pub fn libp2p(&self) -> &libp2p::NetworkController {
+    pub fn libp2p_controller(&self) -> Option<&libp2p::NetworkController> {
+        self.libp2p.as_ref()
+    }
+
+    pub fn tentacle_controller(&self) -> Option<&tentacle::NetworkController> {
+        self.tentacle.as_ref()
+    }
+
+    pub fn must_get_libp2p_controller(&self) -> &libp2p::NetworkController {
         self.libp2p.as_ref().expect("Tentacle controller exists")
     }
 
-    pub fn tentacle(&self) -> &tentacle::NetworkController {
+    pub fn must_get_tentacle_controller(&self) -> &tentacle::NetworkController {
         self.tentacle.as_ref().expect("Tentacle controller exists")
     }
 
     /// Set ckb2023 start
     pub fn init_ckb2023(&self) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .ckb2023
             .store(true, Ordering::SeqCst);
     }
 
     pub fn dial_libp2p_peer(&self, multiaddr: libp2p::Multiaddr) {
-        let libp2p = self.libp2p();
+        let libp2p = self.must_get_libp2p_controller();
 
         let handle = &libp2p.handle;
         let command_sender = libp2p.command_sender.clone();
@@ -554,7 +587,7 @@ impl NetworkController {
     }
 
     pub fn disconnect_libp2p_peer(&self, peer: libp2p::PeerId, message: String) {
-        let libp2p = self.libp2p();
+        let libp2p = self.must_get_libp2p_controller();
 
         let handle = &libp2p.handle;
         let command_sender = libp2p.command_sender.clone();
@@ -568,66 +601,76 @@ impl NetworkController {
 
     /// Get ckb2023 flag
     pub fn load_ckb2023(&self) -> bool {
-        self.tentacle().network_state.ckb2023.load(Ordering::SeqCst)
+        self.must_get_tentacle_controller()
+            .network_state
+            .ckb2023
+            .load(Ordering::SeqCst)
     }
 
     /// Node listen address list
     pub fn public_urls(&self, max_urls: usize) -> Vec<(String, u8)> {
-        self.tentacle().network_state.public_urls(max_urls)
+        self.must_get_tentacle_controller()
+            .network_state
+            .public_urls(max_urls)
     }
 
     /// ckb version
     pub fn version(&self) -> &String {
-        &self.tentacle().version
+        &self.must_get_tentacle_controller().version
     }
 
     /// Node peer id's base58 format string
     pub fn node_id(&self) -> String {
-        self.tentacle().network_state.node_id()
+        self.must_get_tentacle_controller().network_state.node_id()
     }
 
     /// p2p service control
     pub fn p2p_control(&self) -> &ServiceControl {
-        &self.tentacle().p2p_control
+        &self.must_get_tentacle_controller().p2p_control
     }
 
     pub fn dial_node(&self, addr: Multiaddr) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .dial_identify(self.p2p_control(), addr);
     }
 
     /// Dial remote node
     pub fn add_node(&self, address: Multiaddr) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .add_node(self.p2p_control(), address)
     }
 
     /// Disconnect session with peer id
     pub fn remove_node(&self, peer_id: &PeerId) {
-        if let Some(session_id) = self
-            .tentacle()
-            .network_state
-            .peer_registry
-            .read()
-            .get_key_by_peer_id(peer_id)
-        {
-            if let Err(err) = tentacle_disconnect_with_message(
-                self.p2p_control(),
-                session_id,
-                "disconnect manually",
-            ) {
-                debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
+        match peer_id {
+            PeerId::Tentacle(peer_id) => {
+                if let Some(session_id) = self
+                .must_get_tentacle_controller()
+                .network_state
+                .peer_registry
+                .read()
+                .get_key_by_peer_id(peer_id)
+            {
+                if let Err(err) = tentacle_disconnect_with_message(
+                    self.p2p_control(),
+                    session_id,
+                    "disconnect manually",
+                ) {
+                    debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
+                }
+            } else {
+                error!("Cannot find peer {:?}", peer_id);
             }
-        } else {
-            error!("Cannot find peer {:?}", peer_id);
+            },
+            PeerId::Libp2p(_) => todo!("remove_node for libp2p not implemented"),
         }
     }
 
     /// Get banned peer list
     pub fn get_banned_addrs(&self) -> Vec<BannedAddr> {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .peer_store
             .lock()
@@ -637,7 +680,7 @@ impl NetworkController {
 
     /// Clear banned list
     pub fn clear_banned_addrs(&self) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .peer_store
             .lock()
@@ -646,19 +689,19 @@ impl NetworkController {
 
     /// Get address info from peer store
     pub fn addr_info(&self, addr: &Multiaddr) -> Option<AddrInfo> {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .peer_store
             .lock()
             .addr_manager()
-            .get(addr)
+            .get(&addr)
             .cloned()
     }
 
     /// Ban an ip
-    pub fn ban(&self, address: IpNetwork, ban_until: u64, ban_reason: String) {
+    pub fn ban(&self, address: IpNetwork, ban_until: u64, ban_reason: &str) {
         self.disconnect_peers_in_ip_range(address, &ban_reason);
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .peer_store
             .lock()
@@ -667,7 +710,7 @@ impl NetworkController {
 
     /// Unban an ip
     pub fn unban(&self, address: &IpNetwork) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .peer_store
             .lock()
@@ -677,40 +720,58 @@ impl NetworkController {
 
     /// Return all connected peers' information
     pub fn connected_peers(&self) -> Vec<(PeerIndex, Peer)> {
-        self.tentacle().network_state.with_peer_registry(|reg| {
-            reg.peers()
-                .iter()
-                .map(|(peer_index, peer)| (*peer_index, peer.clone()))
-                .collect::<Vec<_>>()
-        })
+        self.must_get_tentacle_controller()
+            .network_state
+            .with_peer_registry(|reg| {
+                reg.peers()
+                    .iter()
+                    .map(|(peer_index, peer)| (*peer_index, peer.clone()))
+                    .collect::<Vec<_>>()
+            })
     }
 
     /// Ban an peer through peer index
-    pub fn ban_peer(&self, peer_index: impl Into<PeerIndex>, duration: Duration, reason: String) {
-        self.tentacle()
-            .network_state
-            .ban_session(self.p2p_control(), peer_index, duration, reason);
+    pub fn ban_peer(&self, peer_index: impl Into<PeerIndex>, duration: Duration, reason: &str) {
+        match peer_index.into() {
+            PeerIndex::Tentacle(s) => {
+                self.must_get_tentacle_controller()
+                    .network_state
+                    .ban_session(self.p2p_control(), s, duration, reason);
+            }
+            PeerIndex::Libp2p(peer_id) => {
+                self.must_get_libp2p_controller().command_sender.send(
+                    libp2p::Command::Disconnect {
+                        peer: peer_id,
+                        message: "".to_string(),
+                    },
+                );
+            }
+        }
     }
 
     /// disconnect peers with matched peer_ip or peer_ip_network, eg: 192.168.0.2 or 192.168.0.0/24
     fn disconnect_peers_in_ip_range(&self, address: IpNetwork, reason: &str) {
-        self.tentacle().network_state.with_peer_registry(|reg| {
-            reg.peers()
-                .iter()
-                .for_each(|(peer_index, peer)| match peer_index {
-                    PeerIndex::Tentacle(peer_index) => {
-                        if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr) {
-                            if address.contains(addr.ip()) {
-                                let _ = tentacle_disconnect_with_message(
-                                    self.p2p_control(),
-                                    *peer_index,
-                                    &format!("Ban peer {}, reason: {}", addr.ip(), reason),
-                                );
+        self.must_get_tentacle_controller()
+            .network_state
+            .with_peer_registry(|reg| {
+                reg.peers()
+                    .iter()
+                    .for_each(|(peer_index, peer)| match peer_index {
+                        PeerIndex::Tentacle(peer_index) => {
+                            if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr.clone().into())
+                            {
+                                if address.contains(addr.ip()) {
+                                    let _ = tentacle_disconnect_with_message(
+                                        self.p2p_control(),
+                                        *peer_index,
+                                        &format!("Ban peer {}, reason: {}", addr.ip(), reason),
+                                    );
+                                }
                             }
                         }
-                    }
-                })
-        });
+                        PeerIndex::Libp2p(_) => todo!(),
+                    })
+            });
     }
 
     fn try_broadcast(
@@ -773,12 +834,14 @@ impl NetworkController {
 
     /// network message processing controller, always true, if false, discard any received messages
     pub fn is_active(&self) -> bool {
-        self.tentacle().network_state.is_active()
+        self.must_get_tentacle_controller()
+            .network_state
+            .is_active()
     }
 
     /// Change active status, if set false discard any received messages
     pub fn set_active(&self, active: bool) {
-        self.tentacle()
+        self.must_get_tentacle_controller()
             .network_state
             .active
             .store(active, Ordering::Relaxed);
@@ -786,12 +849,18 @@ impl NetworkController {
 
     /// Return all connected peers' protocols info
     pub fn protocols(&self) -> Vec<(ProtocolId, String, Vec<String>)> {
-        self.tentacle().network_state.protocols.read().clone()
+        self.must_get_tentacle_controller()
+            .network_state
+            .protocols
+            .read()
+            .clone()
     }
 
     /// Try ping all connected peers
     pub fn ping_peers(&self) {
-        if let Some(mut ping_controller) = self.tentacle().ping_controller.clone() {
+        if let Some(mut ping_controller) =
+            self.must_get_tentacle_controller().ping_controller.clone()
+        {
             let _ignore = ping_controller.try_send(());
         }
     }

@@ -1,11 +1,10 @@
 use crate::{
     errors::{PeerStoreError, Result},
-    extract_peer_id, multiaddr_to_socketaddr,
     network_group::Group,
     peer_store::{
         addr_manager::AddrManager,
         ban_list::BanList,
-        types::{ip_to_network, AddrInfo, BannedAddr, PeerInfo},
+        types::{AddrInfo, BannedAddr, PeerInfo},
         Behaviour, Multiaddr, PeerScoreConfig, ReportResult, Status, ADDR_COUNT_LIMIT,
         ADDR_TIMEOUT_MS, ADDR_TRY_TIMEOUT_MS, DIAL_INTERVAL,
     },
@@ -13,6 +12,7 @@ use crate::{
 };
 use ipnetwork::IpNetwork;
 use rand::prelude::IteratorRandom;
+
 use std::collections::{hash_map::Entry, HashMap};
 
 /// Peer store
@@ -42,14 +42,14 @@ impl PeerStore {
     pub fn add_connected_peer(&mut self, addr: Multiaddr) {
         match self
             .connected_peers
-            .entry(extract_peer_id(&addr).expect("connected addr should have peer id"))
+            .entry(PeerId::try_from(&addr).expect("connected addr should have peer id"))
         {
             Entry::Occupied(mut entry) => {
                 let peer = entry.get_mut();
-                peer.connected_addr = addr;
+                peer.connected_addr = addr.into();
             }
             Entry::Vacant(entry) => {
-                let peer = PeerInfo::new(addr);
+                let peer = PeerInfo::new(addr.into());
                 entry.insert(peer);
             }
         }
@@ -83,11 +83,11 @@ impl PeerStore {
     }
 
     /// Update outbound peer last connected ms
-    pub fn update_outbound_addr_last_connected_ms(&mut self, addr: Multiaddr) {
+    pub fn update_outbound_addr_last_connected_ms(&mut self, addr: &Multiaddr) {
         if self.ban_list.is_addr_banned(&addr) {
             return;
         }
-        if let Some(info) = self.addr_manager.get_mut(&addr) {
+        if let Some(info) = self.addr_manager.get_mut(addr) {
             info.last_connected_at_ms = ckb_systemtime::unix_time_as_millis()
         }
     }
@@ -111,7 +111,7 @@ impl PeerStore {
                 self.ban_addr(
                     addr,
                     self.score_config.ban_timeout_ms,
-                    format!("report behaviour {behaviour:?}"),
+                    &format!("report behaviour {behaviour:?}"),
                 );
                 return ReportResult::Banned;
             }
@@ -121,7 +121,9 @@ impl PeerStore {
 
     /// Remove peer id
     pub fn remove_disconnected_peer(&mut self, addr: &Multiaddr) -> Option<PeerInfo> {
-        extract_peer_id(addr).and_then(|peer_id| self.connected_peers.remove(&peer_id))
+        PeerId::try_from(addr)
+            .ok()
+            .and_then(|peer_id| self.connected_peers.remove(&peer_id))
     }
 
     /// Get peer status
@@ -145,7 +147,7 @@ impl PeerStore {
         // get addrs that can attempt.
         self.addr_manager
             .fetch_random(count, |peer_addr: &AddrInfo| {
-                extract_peer_id(&peer_addr.addr)
+                PeerId::try_from(&peer_addr.addr)
                     .map(|peer_id| !peers.contains_key(&peer_id))
                     .unwrap_or_default()
                     && peer_addr.connected(|t| {
@@ -171,7 +173,7 @@ impl PeerStore {
         let peers = &self.connected_peers;
         self.addr_manager
             .fetch_random(count, |peer_addr: &AddrInfo| {
-                extract_peer_id(&peer_addr.addr)
+                PeerId::try_from(&peer_addr.addr)
                     .map(|peer_id| !peers.contains_key(&peer_id))
                     .unwrap_or_default()
                     && !peer_addr.tried_in_last_minute(now_ms)
@@ -191,7 +193,7 @@ impl PeerStore {
         self.addr_manager
             .fetch_random(count, |peer_addr: &AddrInfo| {
                 required_flags_filter(required_flags, Flags::from_bits_truncate(peer_addr.flags))
-                    && (extract_peer_id(&peer_addr.addr)
+                    && (PeerId::try_from(&peer_addr.addr)
                         .map(|peer_id| peers.contains_key(&peer_id))
                         .unwrap_or_default()
                         || peer_addr.connected(|t| t > addr_expired_ms))
@@ -199,21 +201,20 @@ impl PeerStore {
     }
 
     /// Ban an addr
-    pub(crate) fn ban_addr(&mut self, addr: &Multiaddr, timeout_ms: u64, ban_reason: String) {
-        if let Some(addr) = multiaddr_to_socketaddr(addr) {
-            let network = ip_to_network(addr.ip());
+    pub(crate) fn ban_addr(&mut self, addr: &Multiaddr, timeout_ms: u64, ban_reason: &str) {
+        if let Ok(network) = IpNetwork::try_from(addr) {
             self.ban_network(network, timeout_ms, ban_reason)
         }
         self.addr_manager.remove(addr);
     }
 
-    pub(crate) fn ban_network(&mut self, network: IpNetwork, timeout_ms: u64, ban_reason: String) {
+    pub(crate) fn ban_network(&mut self, network: IpNetwork, timeout_ms: u64, ban_reason: &str) {
         let now_ms = ckb_systemtime::unix_time_as_millis();
         let ban_addr = BannedAddr {
             address: network,
             ban_until: now_ms + timeout_ms,
             created_at: now_ms,
-            ban_reason,
+            ban_reason: ban_reason.to_string(),
         };
         self.mut_ban_list().ban(ban_addr);
     }

@@ -3,8 +3,7 @@ use crate::{
     extract_peer_id,
     multiaddr::Multiaddr,
     peer_store::{
-        ban_list::CLEAR_INTERVAL_COUNTER, types::multiaddr_to_ip_network, PeerStore, Status,
-        ADDR_COUNT_LIMIT, ADDR_TRY_TIMEOUT_MS,
+        ban_list::CLEAR_INTERVAL_COUNTER, PeerStore, Status, ADDR_COUNT_LIMIT, ADDR_TRY_TIMEOUT_MS,
     },
     Behaviour, Flags, PeerId, SessionType,
 };
@@ -94,7 +93,7 @@ fn test_ban_peer() {
     assert!(peer_store.is_addr_banned(&addr));
     peer_store
         .mut_ban_list()
-        .unban_network(&multiaddr_to_ip_network(&addr).unwrap());
+        .unban_network(&IpNetwork::try_from(&addr).unwrap());
     assert!(!peer_store.is_addr_banned(&addr));
 
     let mut set = HashSet::with_capacity(CLEAR_INTERVAL_COUNTER);

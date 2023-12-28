@@ -489,10 +489,11 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.async_p2p_control
-            .quick_send_message_to(session_id, proto_id, data)
-            .await?;
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .quick_send_message_to(session_id, proto_id, data)
+                .await?;
+        }
         Ok(())
     }
     async fn async_quick_send_message_to(
@@ -506,11 +507,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.async_p2p_control
-            .quick_send_message_to(session_id, self.proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .quick_send_message_to(session_id, self.proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_quick_filter_broadcast(
         &self,
@@ -534,11 +537,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.async_p2p_control
-            .send_message_to(session_id, proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .send_message_to(session_id, proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -547,11 +552,13 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.async_p2p_control
-            .send_message_to(session_id, self.proto_id, data)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.async_p2p_control
+                .send_message_to(session_id, self.proto_id, data)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     async fn async_filter_broadcast(
         &self,
@@ -565,10 +572,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     async fn async_disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        tentacle_async_disconnect_with_message(&self.async_p2p_control, session_id, message)
-            .await?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            tentacle_async_disconnect_with_message(&self.async_p2p_control, session_id, message)
+                .await?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_send_message(
         &self,
@@ -582,10 +591,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.p2p_control
-            .quick_send_message_to(session_id, proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .quick_send_message_to(session_id, proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -594,10 +605,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.p2p_control
-            .quick_send_message_to(session_id, self.proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .quick_send_message_to(session_id, self.proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn quick_filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
         self.p2p_control
@@ -616,10 +629,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.p2p_control
-            .send_message_to(session_id, proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .send_message_to(session_id, proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn send_message_to(&self, peer_index: PeerIndex, data: Bytes) -> Result<(), Error> {
         trace!(
@@ -628,10 +643,12 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
             peer_index,
             data.len()
         );
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.p2p_control
-            .send_message_to(session_id, self.proto_id, data)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.p2p_control
+                .send_message_to(session_id, self.proto_id, data)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn filter_broadcast(&self, target: TargetSession, data: Bytes) -> Result<(), Error> {
         self.p2p_control
@@ -640,9 +657,11 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
     }
     fn disconnect(&self, peer_index: PeerIndex, message: &str) -> Result<(), Error> {
         debug!("disconnect peer: {}, message: {}", peer_index, message);
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        tentacle_disconnect_with_message(&self.p2p_control, session_id, message)?;
-        Ok(())
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            tentacle_disconnect_with_message(&self.p2p_control, session_id, message)?;
+            return Ok(());
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
 
     fn get_peer(&self, peer_index: PeerIndex) -> Option<Peer> {
@@ -670,14 +689,20 @@ impl CKBProtocolContext for DefaultCKBProtocolContext {
         })
     }
     fn report_peer(&self, peer_index: PeerIndex, behaviour: Behaviour) {
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.network_state
-            .report_session(&self.p2p_control, session_id, behaviour);
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.network_state
+                .report_session(&self.p2p_control, session_id, behaviour);
+            return;
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
     fn ban_peer(&self, peer_index: PeerIndex, duration: Duration, reason: String) {
-        let PeerIndex::Tentacle(session_id) = peer_index;
-        self.network_state
-            .ban_session(&self.p2p_control, session_id, duration, reason);
+        if let PeerIndex::Tentacle(session_id) = peer_index {
+            self.network_state
+                .ban_session(&self.p2p_control, session_id, duration, &reason);
+            return;
+        }
+        unimplemented!("Method not implemented for peer types other than tentacle");
     }
 
     fn protocol_id(&self) -> ProtocolId {

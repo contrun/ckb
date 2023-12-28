@@ -70,8 +70,9 @@ impl EventHandler {
                             .peers()
                             .values()
                             .filter(|peer| peer.is_inbound() && !peer.is_whitelist)
-                            .map(|peer| match peer.index {
-                                PeerIndex::Tentacle(s) => s,
+                            .flat_map(|peer| match peer.index {
+                                PeerIndex::Tentacle(s) => Some(s),
+                                PeerIndex::Libp2p(_) => None,
                             })
                             .collect::<Vec<SessionId>>()
                     })
@@ -99,10 +100,10 @@ impl ServiceHandle for EventHandler {
                     DialerErrorKind::HandshakeError(HandshakeErrorKind::SecioError(
                         SecioError::ConnectSelf,
                     )) => {
-                        debug!("dial observed address success: {:?}", address);
+                        debug!("dial observed address success: {:?}", &address);
                         if let Some(ip) = multiaddr_to_socketaddr(&address) {
                             if is_reachable(ip.ip()) {
-                                public_addrs.insert(address);
+                                public_addrs.insert((&address).into());
                             }
                         }
                         return;
@@ -110,14 +111,14 @@ impl ServiceHandle for EventHandler {
                     DialerErrorKind::IoError(e)
                         if e.kind() == std::io::ErrorKind::AddrNotAvailable =>
                     {
-                        warn!("DialerError({}) {}", address, e);
+                        warn!("DialerError({}) {}", &address, e);
                     }
                     _ => {
-                        debug!("DialerError({}) {}", address, error);
+                        debug!("DialerError({}) {}", &address, error);
                     }
                 }
-                public_addrs.remove(&address);
-                self.network_state.dial_failed(&address);
+                public_addrs.remove(&address.clone().into());
+                self.network_state.dial_failed(&address.into());
             }
             ServiceError::ProtocolError {
                 id,
@@ -131,7 +132,7 @@ impl ServiceHandle for EventHandler {
                     &context.control().clone().into(),
                     id,
                     Duration::from_secs(300),
-                    message,
+                    &message,
                 );
             }
             ServiceError::SessionTimeout { session_context } => {
@@ -174,7 +175,7 @@ impl ServiceHandle for EventHandler {
                             &context.control().clone().into(),
                             id,
                             Duration::from_secs(300),
-                            format!("protocol {proto_id} panic when process peer message"),
+                            &format!("protocol {proto_id} panic when process peer message"),
                         );
                     }
                     #[cfg(feature = "with_sentry")]
@@ -203,7 +204,8 @@ impl ServiceHandle for EventHandler {
                     "SessionOpen({}, {})",
                     session_context.id, session_context.address,
                 );
-                self.network_state.dial_success(&session_context.address);
+                self.network_state
+                    .dial_success(&session_context.address.clone().into());
 
                 let iter = self.inbound_eviction();
 
@@ -219,7 +221,7 @@ impl ServiceHandle for EventHandler {
 
                 if self
                     .network_state
-                    .with_peer_registry(|reg| reg.is_feeler(&session_context.address))
+                    .with_peer_registry(|reg| reg.is_feeler(&(&session_context.address).into()))
                 {
                     debug!(
                         "feeler connected {} => {}",
@@ -229,7 +231,7 @@ impl ServiceHandle for EventHandler {
                     match self.network_state.accept_peer(&session_context) {
                         Ok(Some(evicted_peer)) => {
                             debug!(
-                                "evict peer (disconnect it), {:?} => {}",
+                                "evict peer (disconnect it), {:?} => {:?}",
                                 evicted_peer.index, evicted_peer.connected_addr,
                             );
                             match evicted_peer.index {
@@ -242,6 +244,7 @@ impl ServiceHandle for EventHandler {
                                         debug!("Disconnect failed {:?}, error: {:?}", s, err);
                                     }
                                 }
+                                PeerIndex::Libp2p(_) => panic!("Must not evict non-tentacle peers"),
                             }
                         }
                         Ok(None) => debug!(
@@ -274,7 +277,7 @@ impl ServiceHandle for EventHandler {
                 );
                 let peer_exists = self.network_state.with_peer_registry_mut(|reg| {
                     // should make sure feelers is clean
-                    reg.remove_feeler(&session_context.address);
+                    reg.remove_feeler(&(&session_context.address).into());
                     reg.remove_peer(session_context.id).is_some()
                 });
                 if peer_exists {
@@ -283,7 +286,7 @@ impl ServiceHandle for EventHandler {
                         session_context.id, session_context.address,
                     );
                     self.network_state.with_peer_store_mut(|peer_store| {
-                        peer_store.remove_disconnected_peer(&session_context.address);
+                        peer_store.remove_disconnected_peer(&(&session_context.address).into());
                     });
                 }
             }
@@ -598,12 +601,18 @@ impl NetworkService {
         // try get addrs from peer_store, if peer_store have no enough addrs then use bootnodes
         let nodes_to_dial = self.network_state.with_peer_store_mut(|peer_store| {
             let count = max((config.max_outbound_peers >> 1) as usize, 1);
-            let mut addrs = self.network_state.config.whitelist_peers();
+            let mut addrs = self
+                .network_state
+                .config
+                .whitelist_peers()
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>();
             addrs.extend(
                 peer_store
                     .fetch_addrs_to_attempt(count, *target)
                     .into_iter()
-                    .map(|paddr| paddr.addr)
+                    .map(|paddr| paddr.addr.into())
                     .collect::<Vec<_>>(),
             );
             // Get bootnodes randomly
@@ -613,6 +622,7 @@ impl NetworkService {
                 .iter()
                 .choose_multiple(&mut rand::thread_rng(), count.saturating_sub(addrs.len()))
                 .into_iter()
+                .map(Into::into)
                 .cloned();
             addrs.extend(bootnodes);
             addrs
@@ -661,7 +671,7 @@ impl NetworkService {
                             network_state
                                 .listened_addrs
                                 .write()
-                                .push(listen_address.clone());
+                                .push(listen_address.into());
                         }
                         Err(err) => {
                             warn!(

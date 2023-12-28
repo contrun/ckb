@@ -1,11 +1,11 @@
 use crate::{
     peer_store::{types::AddrInfo, PeerStore},
-    NetworkState,
+    Multiaddr, NetworkState,
 };
 use ckb_logger::trace;
 use ckb_systemtime::unix_time_as_millis;
 use futures::Future;
-use p2p::{multiaddr::MultiAddr, service::ServiceControl};
+use p2p::service::ServiceControl;
 use rand::prelude::IteratorRandom;
 use std::{
     pin::Pin,
@@ -64,7 +64,8 @@ impl OutboundPeerService {
         );
 
         for addr in attempt_peers.into_iter().map(|info| info.addr) {
-            self.network_state.dial_feeler(&self.p2p_control, addr);
+            self.network_state
+                .dial_feeler(&self.p2p_control, addr.into());
         }
     }
 
@@ -92,7 +93,7 @@ impl OutboundPeerService {
             paddrs
         };
 
-        let peers: Box<dyn Iterator<Item = MultiAddr>> = if self.try_identify_count > 3 {
+        let peers: Box<dyn Iterator<Item = Multiaddr>> = if self.try_identify_count > 3 {
             self.try_identify_count = 0;
             let len = self.network_state.bootnodes.len();
             if len < count {
@@ -139,7 +140,7 @@ impl OutboundPeerService {
 
     fn try_dial_whitelist(&self) {
         for addr in self.network_state.config.whitelist_peers() {
-            self.network_state.dial_identify(&self.p2p_control, addr);
+            self.network_state.dial_identify(&self.p2p_control, addr.into());
         }
     }
 

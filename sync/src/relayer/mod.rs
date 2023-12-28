@@ -322,8 +322,9 @@ impl Relayer {
                 .get_connected_peers()
                 .into_iter()
                 .filter(|target_peer| peer != *target_peer)
-                .map(|peer| match peer {
-                    PeerIndex::Tentacle(s) => s,
+                .filter_map(|peer| match peer {
+                    PeerIndex::Tentacle(s) => Some(s),
+                    PeerIndex::Libp2p(_) => None,
                 })
                 .take(MAX_RELAY_PEERS)
                 .collect();

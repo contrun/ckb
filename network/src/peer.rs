@@ -1,10 +1,17 @@
 use crate::network_group::Group;
 use crate::{
-    multiaddr::Multiaddr, tentacle::protocols::identify::Flags, ProtocolId, ProtocolVersion,
-    SessionType,
+    multiaddr::Multiaddr as TentacleMultiaddr, tentacle::protocols::identify::Flags, ProtocolId,
+    ProtocolVersion, SessionType,
 };
-use p2p::SessionId;
+use ipnetwork::IpNetwork;
+use libp2p::multiaddr::Protocol;
+use libp2p::{Multiaddr as Libp2pMultiaddr, PeerId as Libp2pPeerId};
+use p2p::utils::{extract_peer_id, multiaddr_to_socketaddr};
+use p2p::{secio::PeerId as TentaclePeerId, SessionId};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use std::net::{IpAddr, SocketAddr};
 use std::time::{Duration, Instant};
 
 /// Peer info from identify protocol message
@@ -14,6 +21,206 @@ pub struct PeerIdentifyInfo {
     pub client_version: String,
     /// Node flags
     pub flags: Flags,
+}
+
+#[derive(Clone, PartialOrd, PartialEq, Eq, Hash, Debug)]
+pub enum PeerId {
+    Tentacle(TentaclePeerId),
+    Libp2p(Libp2pPeerId),
+}
+
+impl From<&PeerId> for TentaclePeerId {
+    fn from(value: &PeerId) -> Self {
+        match value {
+            PeerId::Tentacle(t) => t.clone(),
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<&PeerId> for Libp2pPeerId {
+    fn from(value: &PeerId) -> Self {
+        match value {
+            PeerId::Libp2p(l) => l.clone(),
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<&TentaclePeerId> for PeerId {
+    fn from(value: &TentaclePeerId) -> Self {
+        PeerId::Tentacle(value.clone())
+    }
+}
+
+impl From<&Libp2pPeerId> for PeerId {
+    fn from(value: &Libp2pPeerId) -> Self {
+        PeerId::Libp2p(value.clone())
+    }
+}
+
+impl From<PeerId> for TentaclePeerId {
+    fn from(value: PeerId) -> Self {
+        match value {
+            PeerId::Tentacle(t) => t,
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<PeerId> for Libp2pPeerId {
+    fn from(value: PeerId) -> Self {
+        match value {
+            PeerId::Libp2p(l) => l,
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<TentaclePeerId> for PeerId {
+    fn from(value: TentaclePeerId) -> Self {
+        PeerId::Tentacle(value)
+    }
+}
+
+impl From<Libp2pPeerId> for PeerId {
+    fn from(value: Libp2pPeerId) -> Self {
+        PeerId::Libp2p(value)
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Hash, Debug, Serialize, Deserialize)]
+pub enum Multiaddr {
+    Tentacle(TentacleMultiaddr),
+    Libp2p(Libp2pMultiaddr),
+}
+
+impl TryFrom<&Multiaddr> for SocketAddr {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        match value {
+            Multiaddr::Tentacle(t) => {
+                multiaddr_to_socketaddr(t).ok_or(format!("Unexpected addr: {}", t))
+            }
+            Multiaddr::Libp2p(l) => {
+                let mut iter = l.iter();
+                let ip_addr = iter.next().and_then(|p| match p {
+                    Protocol::Ip4(a) => Some(a.into()),
+                    Protocol::Ip6(a) => Some(a.into()),
+                    _ => None,
+                });
+                let port = iter.next().and_then(|p| match p {
+                    Protocol::Udp(port) => Some(port.into()),
+                    Protocol::Tcp(port) => Some(port.into()),
+                    _ => None,
+                });
+                ip_addr
+                    .zip(port)
+                    .map(|(ip, port)| SocketAddr::new(ip, port))
+            }
+            .ok_or(format!("Unexpected addr {}", l)),
+        }
+    }
+}
+
+impl TryFrom<&Multiaddr> for IpAddr {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        SocketAddr::try_from(value).map(|addr| addr.ip())
+    }
+}
+
+impl TryFrom<&Multiaddr> for IpNetwork {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        Ok(match SocketAddr::try_from(value)?.ip() {
+            IpAddr::V4(v4) => IpNetwork::V4(v4.into()),
+            IpAddr::V6(v6) => IpNetwork::V6(v6.into()),
+        })
+    }
+}
+
+impl From<&Multiaddr> for TentacleMultiaddr {
+    fn from(value: &Multiaddr) -> Self {
+        match value {
+            Multiaddr::Tentacle(t) => t.clone(),
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<&Multiaddr> for Libp2pMultiaddr {
+    fn from(value: &Multiaddr) -> Self {
+        match value {
+            Multiaddr::Libp2p(l) => l.clone(),
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<&TentacleMultiaddr> for Multiaddr {
+    fn from(value: &TentacleMultiaddr) -> Self {
+        Multiaddr::Tentacle(value.clone())
+    }
+}
+
+impl From<&Libp2pMultiaddr> for Multiaddr {
+    fn from(value: &Libp2pMultiaddr) -> Self {
+        Multiaddr::Libp2p(value.clone())
+    }
+}
+
+impl From<Multiaddr> for TentacleMultiaddr {
+    fn from(value: Multiaddr) -> Self {
+        match value {
+            Multiaddr::Tentacle(t) => t,
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<Multiaddr> for Libp2pMultiaddr {
+    fn from(value: Multiaddr) -> Self {
+        match value {
+            Multiaddr::Libp2p(l) => l,
+            _ => panic!("Unexpected address format, expecting tentacle address"),
+        }
+    }
+}
+
+impl From<TentacleMultiaddr> for Multiaddr {
+    fn from(value: TentacleMultiaddr) -> Self {
+        Multiaddr::Tentacle(value)
+    }
+}
+
+impl From<Libp2pMultiaddr> for Multiaddr {
+    fn from(value: Libp2pMultiaddr) -> Self {
+        Multiaddr::Libp2p(value)
+    }
+}
+
+impl TryFrom<Multiaddr> for PeerId {
+    type Error = String;
+    fn try_from(value: Multiaddr) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Multiaddr> for PeerId {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        match value {
+            Multiaddr::Tentacle(t) => match extract_peer_id(&t) {
+                Some(peer_id) => Ok(PeerId::Tentacle(peer_id)),
+                _ => Err("Failed to extract tentacle peer id".to_string()),
+            },
+            Multiaddr::Libp2p(l) => match l.iter().last() {
+                Some(Protocol::P2p(peer_id)) => Ok(PeerId::Libp2p(peer_id)),
+                _ => Err("Failed to extract libp2p peer id".to_string()),
+            },
+        }
+    }
 }
 
 /// Peer info
@@ -50,9 +257,10 @@ impl Peer {
     pub fn new(
         index: impl Into<PeerIndex>,
         session_type: SessionType,
-        connected_addr: Multiaddr,
+        connected_addr: impl Into<Multiaddr>,
         is_whitelist: bool,
     ) -> Self {
+        let connected_addr = connected_addr.into();
         Peer {
             connected_addr,
             listened_addrs: Vec::new(),
@@ -90,15 +298,17 @@ impl Peer {
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum PeerIndex {
     Tentacle(SessionId),
+    Libp2p(Libp2pPeerId),
 }
 
 impl std::fmt::Display for PeerIndex {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Self::Tentacle(s) => write!(f, "{}", s),
+            Self::Tentacle(s) => write!(f, "tentacle session id {}", s.value()),
+            Self::Libp2p(p) => write!(f, "libp2p peer id {}", p),
         }
     }
 }
@@ -112,5 +322,17 @@ impl From<SessionId> for PeerIndex {
 impl From<&SessionId> for PeerIndex {
     fn from(s: &SessionId) -> Self {
         Self::Tentacle(*s)
+    }
+}
+
+impl From<Libp2pPeerId> for PeerIndex {
+    fn from(s: Libp2pPeerId) -> Self {
+        Self::Libp2p(s)
+    }
+}
+
+impl From<&Libp2pPeerId> for PeerIndex {
+    fn from(s: &Libp2pPeerId) -> Self {
+        Self::Libp2p(*s)
     }
 }

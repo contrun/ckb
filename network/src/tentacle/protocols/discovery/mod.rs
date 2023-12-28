@@ -337,7 +337,7 @@ impl AddressManager for DiscoveryAddressManager {
         for (addr, flags) in addrs.into_iter().filter(|addr| self.is_valid_addr(&addr.0)) {
             trace!("Add discovered address:{:?}", addr);
             self.network_state.with_peer_store_mut(|peer_store| {
-                if let Err(err) = peer_store.add_addr(addr.clone(), flags) {
+                if let Err(err) = peer_store.add_addr((&addr).into(), flags) {
                     debug!(
                         "Failed to add discovered address to peer_store {:?} {:?}",
                         err, addr
@@ -354,12 +354,13 @@ impl AddressManager for DiscoveryAddressManager {
         let addrs = fetch_random_addrs
             .into_iter()
             .filter_map(|paddr| {
-                if !self.is_valid_addr(&paddr.addr) {
+                if !self.is_valid_addr(&(&paddr.addr).into()) {
                     return None;
                 }
                 let f = Flags::from_bits_truncate(paddr.flags);
                 Some((paddr.addr, f))
             })
+            .map(|(addr, flags)| (addr.into(), flags))
             .collect();
         trace!("discovery send random addrs: {:?}", addrs);
         addrs

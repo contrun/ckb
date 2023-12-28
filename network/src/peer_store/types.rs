@@ -1,10 +1,10 @@
 //! Type used on peer store
 use crate::{
     peer_store::{Score, ADDR_MAX_FAILURES, ADDR_MAX_RETRIES, ADDR_TIMEOUT_MS},
-    Flags,
+    Flags, Multiaddr,
 };
 use ipnetwork::IpNetwork;
-use p2p::multiaddr::{Multiaddr, Protocol};
+
 use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 
@@ -17,12 +17,8 @@ pub struct PeerInfo {
 
 impl PeerInfo {
     /// Init
-    pub fn new(
-        connected_addr: Multiaddr,
-    ) -> Self {
-        PeerInfo {
-            connected_addr,
-        }
+    pub fn new(connected_addr: Multiaddr) -> Self {
+        PeerInfo { connected_addr }
     }
 }
 
@@ -123,18 +119,6 @@ pub struct BannedAddr {
     pub ban_reason: String,
     /// Ban time
     pub created_at: u64,
-}
-
-/// Convert multiaddr to IpNetwork
-pub fn multiaddr_to_ip_network(multiaddr: &Multiaddr) -> Option<IpNetwork> {
-    for addr_component in multiaddr {
-        match addr_component {
-            Protocol::Ip4(ipv4) => return Some(IpNetwork::V4(ipv4.into())),
-            Protocol::Ip6(ipv6) => return Some(IpNetwork::V6(ipv6.into())),
-            _ => (),
-        }
-    }
-    None
 }
 
 /// Convert IpAddr to IpNetwork

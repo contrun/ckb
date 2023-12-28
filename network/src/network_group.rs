@@ -1,4 +1,4 @@
-use crate::{multiaddr::Multiaddr, multiaddr_to_socketaddr};
+use crate::Multiaddr;
 use std::net::IpAddr;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
@@ -11,8 +11,8 @@ pub enum Group {
 
 impl From<&Multiaddr> for Group {
     fn from(multiaddr: &Multiaddr) -> Group {
-        if let Some(socket_addr) = multiaddr_to_socketaddr(multiaddr) {
-            let ip_addr = socket_addr.ip();
+        let ip_addr = IpAddr::try_from(multiaddr);
+        if let Ok(ip_addr) = ip_addr {
             if ip_addr.is_loopback() {
                 return Group::LocalNetwork;
             }

@@ -96,7 +96,7 @@ impl CommandSender {
         }) {
             Ok(_) => receiver.blocking_recv().ok().flatten(),
             Err(e) => {
-                debug!("Failed to get peer {}: {:?}", peer, e);
+                debug!("Failed to get peer {:?}: {:?}", peer, e);
                 None
             }
         }

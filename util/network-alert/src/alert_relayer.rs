@@ -172,6 +172,7 @@ impl CKBProtocolHandler for AlertRelayer {
             .filter(|peer| self.mark_as_known(*peer, alert_id))
             .filter_map(|peer| match peer {
                 PeerIndex::Tentacle(s) => Some(s),
+                PeerIndex::Libp2p(_) => None,
             })
             .collect();
         if let Err(err) = nc.quick_filter_broadcast(

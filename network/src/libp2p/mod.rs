@@ -22,7 +22,7 @@ use ckb_spawn::Spawn;
 use tokio::{select, sync::mpsc, time};
 
 use futures::StreamExt;
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 
 pub use libp2p::Multiaddr;
 pub use libp2p::PeerId;
@@ -57,6 +57,7 @@ pub enum Event {}
 
 pub struct NetworkService {
     swarm: Swarm<MyBehaviour>,
+    network_state: Arc<NetworkState>,
     command_receiver: mpsc::Receiver<Command>,
 }
 
@@ -81,6 +82,25 @@ impl NetworkService {
             }
         }
     }
+
+    //     fn ping_received(&mut self, id: SessionId) {
+    //         trace!("received ping from: {:?}", id);
+    //         self.network_state.with_peer_registry_mut(|reg| {
+    //             if let Some(peer) = reg.get_peer_mut(id) {
+    //                 peer.last_ping_protocol_message_received_at = Some(Instant::now());
+    //             }
+    //         });
+    //     }
+    //
+    //     fn pong_received(&mut self, id: SessionId, last_ping: Instant) {
+    //         let now = Instant::now();
+    //         self.network_state.with_peer_registry_mut(|reg| {
+    //             if let Some(peer) = reg.get_peer_mut(id) {
+    //                 peer.ping_rtt = Some(now.saturating_duration_since(last_ping));
+    //                 peer.last_ping_protocol_message_received_at = Some(now);
+    //             }
+    //         });
+    //     }
 
     async fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
@@ -107,7 +127,14 @@ impl NetworkService {
                         );
                         let _ = self.swarm.close_connection(connection);
                     }
-                    Ok(_) => {
+                    Ok(duration) => {
+                        let now = Instant::now();
+                        self.network_state.with_peer_registry_mut(|reg| {
+                            if let Some(peer) = reg.get_peer_mut(peer) {
+                                peer.last_ping_protocol_message_received_at = Some(now);
+                                peer.ping_rtt = Some(duration);
+                            }
+                        });
                         // TODO: also need to update peer state here.
                         // fields like last_ping_protocol_message_received_at and ping_rtt of the peer should be changed,
                         // which is hard to do as the Peer struct contains tentacle specific fields.
@@ -116,6 +143,24 @@ impl NetworkService {
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::Identify(event)) => {
                 info!("Identify event {:?}", event);
+                match event {
+                    identify::Event::Received { peer_id, info } => {
+                        // NOTE: be careful, here easy cause a deadlock,
+                        //    because peer_store's lock scope across peer_registry's lock scope
+                        let mut peer_store = self.network_state.peer_store.lock();
+                        let accept_peer_result = {
+                            self.network_state.peer_registry.write().accept_libp2p_peer(
+                                peer_id,
+                                info,
+                                &mut peer_store,
+                            )
+                        };
+                        if let Err(error) = accept_peer_result {
+                            error!("Accept peer {peer_id} error: {error}");
+                        }
+                    }
+                    _ => {}
+                }
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
                 request_response::Event::Message { message, peer },
@@ -200,9 +245,7 @@ impl NetworkService {
 #[derive(Clone)]
 pub struct NetworkController {
     pub(crate) handle: Handle,
-    pub(crate) network_state: Arc<NetworkState>,
     pub(crate) command_sender: mpsc::Sender<Command>,
-    // event_reciever: mpsc::Receiver<Event>,
 }
 
 impl NetworkController {
@@ -299,6 +342,7 @@ impl NetworkController {
         let (command_sender, command_receiver) = mpsc::channel(100);
         let mut service = NetworkService {
             swarm,
+            network_state,
             command_receiver,
         };
 
@@ -317,9 +361,10 @@ impl NetworkController {
             );
             service.run().await;
         });
+
         if sync_supported {
             let command_sender = command_sender.clone();
-            let mut interval = time::interval(Duration::from_millis(10));
+            let mut interval = time::interval(Duration::from_secs(1));
             handle.spawn_task(async move {
                 select! {
                     _ = interval.tick() => {
@@ -330,7 +375,6 @@ impl NetworkController {
         }
         Ok(NetworkController {
             handle: handle.clone(),
-            network_state,
             command_sender,
         })
     }

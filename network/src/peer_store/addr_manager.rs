@@ -1,9 +1,9 @@
 //! Address manager
 use crate::peer_store::types::AddrInfo;
-use p2p::{multiaddr::Multiaddr, utils::multiaddr_to_socketaddr};
+use crate::Multiaddr;
 use rand::Rng;
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 
 /// Address manager
 #[derive(Default)]
@@ -17,7 +17,7 @@ pub struct AddrManager {
 impl AddrManager {
     /// Add an address information to address manager
     pub fn add(&mut self, mut addr_info: AddrInfo) {
-        if let Some(key) = multiaddr_to_socketaddr(&addr_info.addr) {
+        if let Ok(key) = SocketAddr::try_from(&addr_info.addr) {
             if let Some(&id) = self.addr_to_id.get(&key) {
                 let (exist_last_connected_at_ms, random_id_pos) = {
                     let info = self.id_to_info.get(&id).expect("must exists");
@@ -55,8 +55,7 @@ impl AddrManager {
             let j = rng.gen_range(i, self.random_ids.len());
             self.swap_random_id(j, i);
             let addr_info: AddrInfo = self.id_to_info[&self.random_ids[i]].to_owned();
-            if let Some(socket_addr) = multiaddr_to_socketaddr(&addr_info.addr) {
-                let ip = socket_addr.ip();
+            if let Ok(ip) = IpAddr::try_from(&addr_info.addr) {
                 let is_unique_ip = duplicate_ips.insert(ip);
                 // A trick to make our tests work
                 // TODO remove this after fix the network tests.
@@ -87,7 +86,7 @@ impl AddrManager {
 
     /// Remove an address by ip and port
     pub fn remove(&mut self, addr: &Multiaddr) -> Option<AddrInfo> {
-        multiaddr_to_socketaddr(addr).and_then(|addr| {
+        SocketAddr::try_from(addr).ok().and_then(|addr| {
             self.addr_to_id.remove(&addr).and_then(|id| {
                 let random_id_pos = self.id_to_info.get(&id).expect("exists").random_id_pos;
                 // swap with last index, then remove the last index
@@ -100,7 +99,7 @@ impl AddrManager {
 
     /// Get an address information by ip and port
     pub fn get(&self, addr: &Multiaddr) -> Option<&AddrInfo> {
-        multiaddr_to_socketaddr(addr).and_then(|addr| {
+        SocketAddr::try_from(addr).ok().and_then(|addr| {
             self.addr_to_id
                 .get(&addr)
                 .and_then(|id| self.id_to_info.get(id))
@@ -109,7 +108,7 @@ impl AddrManager {
 
     /// Get a mutable address information by ip and port
     pub fn get_mut(&mut self, addr: &Multiaddr) -> Option<&mut AddrInfo> {
-        if let Some(addr) = multiaddr_to_socketaddr(addr) {
+        if let Ok(addr) = SocketAddr::try_from(addr) {
             if let Some(id) = self.addr_to_id.get(&addr) {
                 self.id_to_info.get_mut(id)
             } else {

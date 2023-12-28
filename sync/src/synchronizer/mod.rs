@@ -225,11 +225,10 @@ impl BlockFetchCMD {
         let message = packed::SyncMessage::new_builder().set(content).build();
 
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
-        let PeerIndex::Tentacle(session_id) = peer;
         let status = send_message_with_command_sender(
             command_sender,
             SupportProtocols::Sync,
-            session_id.into(),
+            peer,
             &message,
         );
         if !status.is_ok() {
