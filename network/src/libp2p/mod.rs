@@ -5,6 +5,7 @@ use crate::SupportProtocols;
 
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace, warn};
+use ckb_stop_handler::new_tokio_exit_rx;
 
 use core::time::Duration;
 use libp2p::{
@@ -244,13 +245,14 @@ impl NetworkService {
                 );
             }
             Command::GetHeader => {
+                info!("GetHeader command received, trying to send sync request");
                 let sync = &mut self.swarm.behaviour_mut().sync;
                 if !sync.is_enabled() {
                     return;
                 }
                 let sync = sync.as_mut().unwrap();
 
-                let addrs: Vec<PeerId> = self
+                let peers: Vec<PeerId> = self
                     .network_state
                     .peer_store
                     .lock()
@@ -267,8 +269,8 @@ impl NetworkService {
                         }
                     })
                     .collect::<Vec<_>>();
-                for addr in addrs {
-                    let peer: PeerId = addr.try_into().expect("Multiaddr to PeerId");
+                info!("Fetched peers from network state {:?}", peers);
+                for peer in peers {
                     let request_id =
                         &sync.send_request(&peer, SyncRequest("hello world".to_string()));
                     info!("Sync message send to {}, request_id {:?}", peer, request_id);
@@ -402,10 +404,17 @@ impl NetworkController {
             let command_sender = command_sender.clone();
             handle.spawn_task(async move {
                 let mut interval = time::interval(Duration::from_secs(1));
-                select! {
-                    _ = interval.tick() => {
-                        command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
-                    },
+                let rx = new_tokio_exit_rx();
+                loop {
+                    select! {
+                        _ = interval.tick() => {
+                            command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
+                        },
+                        _ = rx.cancelled() => {
+                            info!("Exit signal received, exit now");
+                            break
+                        },
+                    }    
                 }
             });
         }

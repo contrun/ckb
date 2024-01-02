@@ -6,7 +6,7 @@ use crate::{
     Peer, PeerId, SessionType, TentaclePeerId,
 };
 use crate::{Multiaddr, PeerIndex};
-use ckb_logger::debug;
+use ckb_logger::{debug, info};
 use core::panic;
 use libp2p::{identify::Info as Libp2pIdentifyInfo, PeerId as Libp2pPeerId};
 use p2p::SessionId;
@@ -137,8 +137,11 @@ impl PeerRegistry {
         // TODO: Some security mitigations are not implemented for libp2p,
         // accept_peer for tentacle above
 
-        peer_store.add_connected_peer(info.observed_addr.clone().into());
-        let peer = Peer::new(index, ConnectionType::Unknown, info.observed_addr, false);
+        let mut addr = info.observed_addr.clone();
+        addr.push(libp2p::multiaddr::Protocol::P2p(peer_id));
+        info!("Adding peer to peer store {:?} {:?}", &info.observed_addr, &addr);
+        peer_store.add_connected_peer((&addr).into());
+        let peer = Peer::new(index, ConnectionType::Unknown, addr, false);
         self.peers.insert(index, peer);
         Ok(())
     }
