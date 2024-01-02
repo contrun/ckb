@@ -1,4 +1,5 @@
 //! Peer registry
+use crate::peer::ConnectionType;
 use crate::peer_store::PeerStore;
 use crate::{
     errors::{Error, PeerError},
@@ -136,9 +137,9 @@ impl PeerRegistry {
         // TODO: Some security mitigations are not implemented for libp2p,
         // accept_peer for tentacle above
 
-        // peer_store.add_connected_peer(remote_addr.clone());
-        // let peer = Peer::new(index, session_type, remote_addr, is_whitelist);
-        // self.peers.insert(index, peer);
+        peer_store.add_connected_peer(info.observed_addr.clone().into());
+        let peer = Peer::new(index, ConnectionType::Unknown, info.observed_addr, false);
+        self.peers.insert(index, peer);
         Ok(())
     }
 

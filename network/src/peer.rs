@@ -243,7 +243,7 @@ pub struct Peer {
     /// Session id
     pub index: PeerIndex,
     /// Session type, Inbound or Outbound
-    pub session_type: SessionType,
+    pub session_type: ConnectionType,
     /// Opened protocols on this session
     pub protocols: HashMap<ProtocolId, ProtocolVersion>,
     /// Whether a whitelist
@@ -256,7 +256,7 @@ impl Peer {
     /// Init session info
     pub fn new(
         index: impl Into<PeerIndex>,
-        session_type: SessionType,
+        session_type: impl Into<ConnectionType>,
         connected_addr: impl Into<Multiaddr>,
         is_whitelist: bool,
     ) -> Self {
@@ -270,7 +270,7 @@ impl Peer {
             connected_time: Instant::now(),
             is_feeler: false,
             index: index.into(),
-            session_type,
+            session_type: session_type.into(),
             protocols: HashMap::with_capacity_and_hasher(1, Default::default()),
             is_whitelist,
             if_lightclient_subscribed: false,
@@ -334,5 +334,40 @@ impl From<Libp2pPeerId> for PeerIndex {
 impl From<&Libp2pPeerId> for PeerIndex {
     fn from(s: &Libp2pPeerId) -> Self {
         Self::Libp2p(*s)
+    }
+}
+
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum ConnectionType {
+    /// Connection type unknown (may occur when backend (e.g. libp2p) does not report connection type)
+    Unknown,
+    /// Connection to peer is initiatated by us.
+    Outbound,
+    /// Connection to peer is outbound
+    Inbound,
+}
+
+impl From<SessionType> for ConnectionType {
+    fn from(value: SessionType) -> Self {
+        match value {
+            SessionType::Inbound => ConnectionType::Inbound,
+            SessionType::Outbound => ConnectionType::Outbound,
+        }
+    }
+}
+
+impl ConnectionType {
+    pub fn is_outbound(&self) -> bool {
+        match self {
+            ConnectionType::Outbound => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_inbound(&self) -> bool {
+        match self {
+            ConnectionType::Inbound => true,
+            _ => false,
+        }
     }
 }
