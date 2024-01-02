@@ -611,7 +611,7 @@ impl NetworkService {
                 .collect::<Vec<_>>();
             addrs.extend(
                 peer_store
-                    .fetch_addrs_to_attempt(count, *target, PeerType::Tentacle)
+                    .fetch_addrs_to_attempt(count, Some(*target), PeerType::Tentacle)
                     .into_iter()
                     .map(|paddr| paddr.addr.into())
                     .collect::<Vec<_>>(),

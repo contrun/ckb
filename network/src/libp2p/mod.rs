@@ -1,10 +1,10 @@
-use crate::NetworkState;
+use crate::{peer::PeerType, NetworkState};
 
 use crate::errors::Error;
 use crate::SupportProtocols;
 
 use ckb_async_runtime::Handle;
-use ckb_logger::{debug, error, info, trace};
+use ckb_logger::{debug, error, info, trace, warn};
 
 use core::time::Duration;
 use libp2p::{
@@ -171,6 +171,36 @@ impl NetworkService {
                     );
                 }
             },
+            SwarmEvent::Behaviour(MyBehaviourEvent::Sync(request_response::Event::Message {
+                message,
+                peer,
+            })) => match message {
+                request_response::Message::Request {
+                    request, channel, ..
+                } => {
+                    info!(
+                        "Sending sync request ({:?}) from channel {:?} of peer {:?}",
+                        request, channel, peer
+                    );
+
+                    let sync = &mut self.swarm.behaviour_mut().sync;
+                    if !sync.is_enabled() {
+                        return;
+                    }
+                    let sync = sync.as_mut().unwrap();
+
+                    let _ = sync.send_response(channel, SyncResponse("Got you".to_string()));
+                }
+                request_response::Message::Response {
+                    request_id,
+                    response,
+                } => {
+                    info!(
+                        "Received disconnect message response ({:?}) for request_id {:?}",
+                        response, request_id,
+                    );
+                }
+            },
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
                 request_response::Event::OutboundFailure {
                     request_id, error, ..
@@ -214,7 +244,35 @@ impl NetworkService {
                 );
             }
             Command::GetHeader => {
-                todo!("GetHeader here");
+                let sync = &mut self.swarm.behaviour_mut().sync;
+                if !sync.is_enabled() {
+                    return;
+                }
+                let sync = sync.as_mut().unwrap();
+
+                let addrs: Vec<PeerId> = self
+                    .network_state
+                    .peer_store
+                    .lock()
+                    .fetch_addrs_to_attempt(10, None, PeerType::Libp2p)
+                    .into_iter()
+                    .filter_map(|paddr| {
+                        let peer: Result<PeerId, _> = (&paddr.addr).try_into();
+                        match peer {
+                            Ok(peer) => Some(peer),
+                            Err(_) => {
+                                warn!("Peer multi address without peerId: {:?}", &paddr.addr);
+                                None
+                            }
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                for addr in addrs {
+                    let peer: PeerId = addr.try_into().expect("Multiaddr to PeerId");
+                    let request_id =
+                        &sync.send_request(&peer, SyncRequest("hello world".to_string()));
+                    info!("Sync message send to {}, request_id {:?}", peer, request_id);
+                }
             }
         }
     }

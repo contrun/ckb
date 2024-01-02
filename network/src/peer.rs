@@ -229,6 +229,42 @@ impl TryFrom<&Multiaddr> for PeerId {
     }
 }
 
+impl TryFrom<Multiaddr> for Libp2pPeerId {
+    type Error = String;
+    fn try_from(value: Multiaddr) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Multiaddr> for Libp2pPeerId {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        let peer: PeerId = value.try_into()?;
+        match peer {
+            PeerId::Libp2p(p) => Ok(p),
+            PeerId::Tentacle(_) => Err("Unexpected peer id format, expecting libp2p peer id".to_string()),
+        }
+    }
+}
+
+impl TryFrom<Multiaddr> for TentaclePeerId {
+    type Error = String;
+    fn try_from(value: Multiaddr) -> Result<Self, Self::Error> {
+        (&value).try_into()
+    }
+}
+
+impl TryFrom<&Multiaddr> for TentaclePeerId {
+    type Error = String;
+    fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
+        let peer: PeerId = value.try_into()?;
+        match peer {
+            PeerId::Tentacle(p) => Ok(p),
+            PeerId::Libp2p(_) => Err("Unexpected peer id format, expecting tentacle peer id".to_string()),
+        }
+    }
+}
+
 /// Peer info
 #[derive(Clone, Debug)]
 pub struct Peer {

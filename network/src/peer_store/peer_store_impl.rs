@@ -140,7 +140,7 @@ impl PeerStore {
     pub fn fetch_addrs_to_attempt(
         &mut self,
         count: usize,
-        required_flags: Flags,
+        required_flags: Option<Flags>,
         typ: PeerType,
     ) -> Vec<AddrInfo> {
         // Get info:
@@ -164,10 +164,14 @@ impl PeerStore {
                     && peer_addr.connected(|t| {
                         t > addr_expired_ms && t <= now_ms.saturating_sub(DIAL_INTERVAL)
                     })
-                    && required_flags_filter(
-                        required_flags,
-                        Flags::from_bits_truncate(peer_addr.flags),
-                    )
+                    && required_flags
+                        .map(|required_flags| {
+                            required_flags_filter(
+                                required_flags,
+                                Flags::from_bits_truncate(peer_addr.flags),
+                            )
+                        })
+                        .unwrap_or(true)
             })
     }
 
