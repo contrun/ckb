@@ -65,3 +65,7 @@ cobertura.xml
 *.profraw
 lcov-unit-test.info
 lcov-integration-test.info
+.direnv
+node1/
+node2/
+\[1

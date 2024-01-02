@@ -23,6 +23,12 @@ pub struct PeerIdentifyInfo {
     pub flags: Flags,
 }
 
+#[derive(Copy, Clone, PartialOrd, PartialEq, Eq, Hash, Debug)]
+pub enum PeerType {
+    Tentacle,
+    Libp2p,
+}
+
 #[derive(Clone, PartialOrd, PartialEq, Eq, Hash, Debug)]
 pub enum PeerId {
     Tentacle(TentaclePeerId),

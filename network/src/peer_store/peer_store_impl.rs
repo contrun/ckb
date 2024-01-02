@@ -1,6 +1,7 @@
 use crate::{
     errors::{PeerStoreError, Result},
     network_group::Group,
+    peer::PeerType,
     peer_store::{
         addr_manager::AddrManager,
         ban_list::BanList,
@@ -136,7 +137,12 @@ impl PeerStore {
     }
 
     /// Get peers for outbound connection, this method randomly return recently connected peer addrs
-    pub fn fetch_addrs_to_attempt(&mut self, count: usize, required_flags: Flags) -> Vec<AddrInfo> {
+    pub fn fetch_addrs_to_attempt(
+        &mut self,
+        count: usize,
+        required_flags: Flags,
+        typ: PeerType,
+    ) -> Vec<AddrInfo> {
         // Get info:
         // 1. Not already connected
         // 2. Connected within 3 days
@@ -148,7 +154,12 @@ impl PeerStore {
         self.addr_manager
             .fetch_random(count, |peer_addr: &AddrInfo| {
                 PeerId::try_from(&peer_addr.addr)
-                    .map(|peer_id| !peers.contains_key(&peer_id))
+                    .map(|peer_id| {
+                        (match peer_id {
+                            PeerId::Libp2p(_) => typ == PeerType::Libp2p,
+                            PeerId::Tentacle(_) => typ == PeerType::Tentacle,
+                        }) && !peers.contains_key(&peer_id)
+                    })
                     .unwrap_or_default()
                     && peer_addr.connected(|t| {
                         t > addr_expired_ms && t <= now_ms.saturating_sub(DIAL_INTERVAL)
@@ -162,7 +173,7 @@ impl PeerStore {
 
     /// Get peers for feeler connection, this method randomly return peer addrs that we never
     /// connected to.
-    pub fn fetch_addrs_to_feeler(&mut self, count: usize) -> Vec<AddrInfo> {
+    pub fn fetch_addrs_to_feeler(&mut self, count: usize, typ: PeerType) -> Vec<AddrInfo> {
         // Get info:
         // 1. Not already connected
         // 2. Not already tried in a minute
@@ -174,7 +185,12 @@ impl PeerStore {
         self.addr_manager
             .fetch_random(count, |peer_addr: &AddrInfo| {
                 PeerId::try_from(&peer_addr.addr)
-                    .map(|peer_id| !peers.contains_key(&peer_id))
+                    .map(|peer_id| {
+                        (match peer_id {
+                            PeerId::Libp2p(_) => typ == PeerType::Libp2p,
+                            PeerId::Tentacle(_) => typ == PeerType::Tentacle,
+                        }) && !peers.contains_key(&peer_id)
+                    })
                     .unwrap_or_default()
                     && !peer_addr.tried_in_last_minute(now_ms)
                     && !peer_addr.connected(|t| t > addr_expired_ms)
@@ -182,7 +198,12 @@ impl PeerStore {
     }
 
     /// Return valid addrs that success connected, used for discovery.
-    pub fn fetch_random_addrs(&mut self, count: usize, required_flags: Flags) -> Vec<AddrInfo> {
+    pub fn fetch_random_addrs(
+        &mut self,
+        count: usize,
+        required_flags: Flags,
+        typ: PeerType,
+    ) -> Vec<AddrInfo> {
         // Get info:
         // 1. Already connected or Connected within 7 days
 
@@ -194,7 +215,12 @@ impl PeerStore {
             .fetch_random(count, |peer_addr: &AddrInfo| {
                 required_flags_filter(required_flags, Flags::from_bits_truncate(peer_addr.flags))
                     && (PeerId::try_from(&peer_addr.addr)
-                        .map(|peer_id| peers.contains_key(&peer_id))
+                        .map(|peer_id| {
+                            (match peer_id {
+                                PeerId::Libp2p(_) => typ == PeerType::Libp2p,
+                                PeerId::Tentacle(_) => typ == PeerType::Tentacle,
+                            }) && peers.contains_key(&peer_id)
+                        })
                         .unwrap_or_default()
                         || peer_addr.connected(|t| t > addr_expired_ms))
             })

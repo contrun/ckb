@@ -8,7 +8,7 @@ use super::{
 
 use crate::{
     network::TentacleEventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
-    NetworkState, PeerIdentifyInfo, SupportProtocols, PeerIndex,
+    NetworkState, PeerIdentifyInfo, SupportProtocols, PeerIndex, peer::PeerType,
 };
 
 use std::{
@@ -64,8 +64,9 @@ impl Node {
             .read()
             .peers()
             .keys()
-            .map(|p| match p {
-                PeerIndex::Tentacle(s) => s,
+            .filter_map(|p| match p {
+                PeerIndex::Tentacle(s) => Some(s),
+                PeerIndex::Libp2p(_) => None,
             })
             .cloned()
             .collect()
@@ -489,7 +490,7 @@ fn test_discovery_behavior() {
         let mut locked = node3.network_state.peer_store.lock();
 
         locked
-            .fetch_addrs_to_feeler(6)
+            .fetch_addrs_to_feeler(6, PeerType::Tentacle)
             .into_iter()
             .map(|peer| peer.addr)
             .flat_map(|addr| {

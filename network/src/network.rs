@@ -739,12 +739,12 @@ impl NetworkController {
                     .ban_session(self.p2p_control(), s, duration, reason);
             }
             PeerIndex::Libp2p(peer_id) => {
-                self.must_get_libp2p_controller().command_sender.send(
+                self.must_get_libp2p_controller().command_sender.try_send(
                     libp2p::Command::Disconnect {
                         peer: peer_id,
                         message: "".to_string(),
                     },
-                );
+                ).expect("command receiver not closed");
             }
         }
     }

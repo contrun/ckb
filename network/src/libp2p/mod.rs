@@ -83,25 +83,6 @@ impl NetworkService {
         }
     }
 
-    //     fn ping_received(&mut self, id: SessionId) {
-    //         trace!("received ping from: {:?}", id);
-    //         self.network_state.with_peer_registry_mut(|reg| {
-    //             if let Some(peer) = reg.get_peer_mut(id) {
-    //                 peer.last_ping_protocol_message_received_at = Some(Instant::now());
-    //             }
-    //         });
-    //     }
-    //
-    //     fn pong_received(&mut self, id: SessionId, last_ping: Instant) {
-    //         let now = Instant::now();
-    //         self.network_state.with_peer_registry_mut(|reg| {
-    //             if let Some(peer) = reg.get_peer_mut(id) {
-    //                 peer.ping_rtt = Some(now.saturating_duration_since(last_ping));
-    //                 peer.last_ping_protocol_message_received_at = Some(now);
-    //             }
-    //         });
-    //     }
-
     async fn handle_event(&mut self, event: SwarmEvent<MyBehaviourEvent>) {
         match event {
             SwarmEvent::ConnectionEstablished { peer_id, .. } => {
@@ -135,9 +116,6 @@ impl NetworkService {
                                 peer.ping_rtt = Some(duration);
                             }
                         });
-                        // TODO: also need to update peer state here.
-                        // fields like last_ping_protocol_message_received_at and ping_rtt of the peer should be changed,
-                        // which is hard to do as the Peer struct contains tentacle specific fields.
                     }
                 }
             }

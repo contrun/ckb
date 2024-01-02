@@ -2,6 +2,7 @@ pub mod protocols;
 
 use crate::errors::{Error, P2PError};
 
+use crate::peer::PeerType;
 use crate::services::{
     dump_peer_store::DumpPeerStoreService, outbound_peer::OutboundPeerService,
     protocol_type_checker::ProtocolTypeCheckerService,
@@ -610,7 +611,7 @@ impl NetworkService {
                 .collect::<Vec<_>>();
             addrs.extend(
                 peer_store
-                    .fetch_addrs_to_attempt(count, *target)
+                    .fetch_addrs_to_attempt(count, *target, PeerType::Tentacle)
                     .into_iter()
                     .map(|paddr| paddr.addr.into())
                     .collect::<Vec<_>>(),
