@@ -400,8 +400,8 @@ impl NetworkController {
 
         if sync_supported {
             let command_sender = command_sender.clone();
-            let mut interval = time::interval(Duration::from_secs(1));
             handle.spawn_task(async move {
+                let mut interval = time::interval(Duration::from_secs(1));
                 select! {
                     _ = interval.tick() => {
                         command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
