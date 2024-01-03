@@ -24,6 +24,7 @@ pub mod tentacle;
 #[cfg(test)]
 mod tests;
 
+pub use crate::peer::{Multiaddr, PeerId};
 pub use crate::{
     behaviour::Behaviour,
     command::{Command, CommandSender},
@@ -41,7 +42,8 @@ pub use crate::{
 pub use p2p::{
     async_trait,
     builder::ServiceBuilder,
-    bytes, multiaddr::{self, MultiAddr as TentacleMultiaddr},
+    bytes,
+    multiaddr::{self, MultiAddr as TentacleMultiaddr},
     secio::{PeerId as TentaclePeerId, PublicKey as TentaclePublicKey},
     service::{ServiceControl, SessionType, TargetProtocol, TargetSession},
     traits::ServiceProtocol,
@@ -49,7 +51,6 @@ pub use p2p::{
     ProtocolId, SessionId, SessionId as TentacleSessionId,
 };
 pub use tokio;
-pub use crate::peer::{Multiaddr, PeerId};
 
 /// Protocol version used by network protocol open
 pub type ProtocolVersion = String;

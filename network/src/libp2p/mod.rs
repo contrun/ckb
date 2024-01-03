@@ -6,6 +6,7 @@ use crate::SupportProtocols;
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace, warn};
 use ckb_stop_handler::new_tokio_exit_rx;
+use p2p::async_trait;
 
 use core::time::Duration;
 use libp2p::{
@@ -33,12 +34,12 @@ use self::sync::{SyncRequest, SyncResponse};
 mod sync;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct DisconnectMessageRequest(String);
+pub struct DisconnectMessageRequest(String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct DisconnectMessageResponse(String);
+pub struct DisconnectMessageResponse(String);
 
 #[derive(NetworkBehaviour)]
-struct MyBehaviour {
+pub struct MyBehaviour {
     identify: identify::Behaviour,
     ping: Toggle<ping::Behaviour>,
     disconnect_message: Toggle<
@@ -56,13 +57,65 @@ pub enum Command {
 
 pub enum Event {}
 
+/// This trait encapsulate the libp2p protocol processing logic.
+/// It will be used to handle libp2p swarm events (e.g. connection established)
+/// and user commands (e.g. disconnect to one peer).
+/// Typically, we react to swarm events with the function `handle_event`,
+/// and process user commands with the function `handle_command`.
+/// These functions can use the state encapsulated in the type `State`.
+/// And they may run in a loop, which can be spawn by the function `run`.
+/// Note that libp2p swarm events is an associated type of this trait (Behaviour),
+/// while the user commands is an fixed type defined in this module (Command).
+/// We may conclude that, given ckb's usage of libp2p, we can just define Behaviour and Command here.
+/// But we will encounter a problem that `Synchronizer` (implemented in crate ckb-sync),
+/// the implmentation of ckb's protocol to sync blocks, depends on this crate (ckb-network).
+/// If we are going to implement sync protocol in this crate, we need to use SyncState to
+/// keep the state of sync protocol, which unfortunately, is a type defined in ckb-sync.
+/// Thus we have a cyclic dependency. We can move SyncState to this crate
+/// (or a crate that would be both the parent of this crate and ckb-sync), but there are
+/// just too many things to move. So we create this trait solve this problem.
+/// A sync protocol in libp2p should create its own sync `Behaviour` which can use `SyncState`
+/// from ckb-sync. This protocol only needs to implement the trait below and use the
+/// NetworkController::new to spawn libp2p network service.
+#[async_trait]
+pub trait NetworkServiceTrait: Send + 'static {
+    type Behaviour: NetworkBehaviour + Send;
+    type State: Send;
+    fn new(
+        swarm: Swarm<Self::Behaviour>,
+        network_state: Self::State,
+        command_receiver: mpsc::Receiver<Command>,
+    ) -> Self;
+    async fn run(mut self);
+    async fn handle_event(
+        &mut self,
+        event: SwarmEvent<<Self::Behaviour as NetworkBehaviour>::ToSwarm>,
+    );
+    async fn handle_command(&mut self, command: Command);
+}
+
 pub struct NetworkService {
     swarm: Swarm<MyBehaviour>,
     network_state: Arc<NetworkState>,
     command_receiver: mpsc::Receiver<Command>,
 }
 
-impl NetworkService {
+#[async_trait]
+impl NetworkServiceTrait for NetworkService {
+    type Behaviour = MyBehaviour;
+    type State = Arc<NetworkState>;
+
+    fn new(
+        swarm: Swarm<Self::Behaviour>,
+        network_state: Self::State,
+        command_receiver: mpsc::Receiver<Command>,
+    ) -> Self {
+        Self {
+            swarm,
+            network_state,
+            command_receiver,
+        }
+    }
     async fn run(mut self) {
         loop {
             tokio::select! {
@@ -286,138 +339,139 @@ pub struct NetworkController {
     pub(crate) command_sender: mpsc::Sender<Command>,
 }
 
-impl NetworkController {
-    pub fn new(
-        handle: &Handle,
-        network_identification: String,
-        client_version: String,
-        network_state: Arc<NetworkState>,
-        supported_protocols: &[SupportProtocols],
-        _required_protocol_ids: &[SupportProtocols],
-    ) -> Result<Self, Error> {
-        info!("supported protocols {:?}", supported_protocols);
-        let priv_key_bytes: [u8; 32] = network_state
-            .config
-            .fetch_private_key_bytes()?
-            .try_into()
-            .expect("Private key must be of length 32");
+pub fn new_swarm(
+    handle: Handle,
+    network_identification: String,
+    client_version: String,
+    network_state: Arc<NetworkState>,
+    supported_protocols: &[SupportProtocols],
+    _required_protocol_ids: &[SupportProtocols],
+    command_sender: mpsc::Sender<Command>,
+) -> Swarm<MyBehaviour> {
+    info!("supported protocols {:?}", supported_protocols);
+    let priv_key_bytes: [u8; 32] = network_state
+        .config
+        .fetch_private_key_bytes()
+        .expect("Private key must be set")
+        .try_into()
+        .expect("Private key must be of length 32");
 
-        // TODO: CKB actually use secp256k1 secret key.
-        // libp2p::identity only exports function secp256k1_from_der
-        let keypair = libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes)
-            .expect("Valid ed25519 key");
+    // TODO: CKB actually use secp256k1 secret key.
+    // libp2p::identity only exports function secp256k1_from_der
+    let keypair =
+        libp2p::identity::Keypair::ed25519_from_bytes(priv_key_bytes).expect("Valid ed25519 key");
 
-        let ping_behaviour =
-            Toggle::from(if supported_protocols.contains(&SupportProtocols::Ping) {
-                let interval = Duration::from_secs(network_state.config.ping_interval_secs);
-                let timeout = Duration::from_secs(network_state.config.ping_timeout_secs);
-                Some(ping::Behaviour::new(
-                    ping::Config::new()
-                        .with_interval(interval)
-                        .with_timeout(timeout),
-                ))
-            } else {
-                None
-            });
+    let ping_behaviour = Toggle::from(if supported_protocols.contains(&SupportProtocols::Ping) {
+        let interval = Duration::from_secs(network_state.config.ping_interval_secs);
+        let timeout = Duration::from_secs(network_state.config.ping_timeout_secs);
+        Some(ping::Behaviour::new(
+            ping::Config::new()
+                .with_interval(interval)
+                .with_timeout(timeout),
+        ))
+    } else {
+        None
+    });
 
-        let disconnect_message_supported =
-            supported_protocols.contains(&SupportProtocols::DisconnectMessage);
-        let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
-            Some(request_response::cbor::Behaviour::new(
-                [(
-                    StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
-                        .expect("Protocol of DisconnectMessage name start with /"),
-                    ProtocolSupport::Full,
-                )],
-                request_response::Config::default(),
-            ))
-        } else {
-            None
-        });
+    let disconnect_message_supported =
+        supported_protocols.contains(&SupportProtocols::DisconnectMessage);
+    let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
+        Some(request_response::cbor::Behaviour::new(
+            [(
+                StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
+                    .expect("Protocol of DisconnectMessage name start with /"),
+                ProtocolSupport::Full,
+            )],
+            request_response::Config::default(),
+        ))
+    } else {
+        None
+    });
 
-        let sync_supported = supported_protocols.contains(&SupportProtocols::Sync);
-        let sync_behaviour = Toggle::from(if sync_supported {
-            Some(request_response::cbor::Behaviour::new(
-                [(
-                    StreamProtocol::try_from_owned(SupportProtocols::Sync.name())
-                        .expect("Protocol of Sync name start with /"),
-                    ProtocolSupport::Full,
-                )],
-                request_response::Config::default(),
-            ))
-        } else {
-            None
-        });
-
-        let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
-            .with_tokio()
-            .with_tcp(
-                tcp::Config::default(),
-                noise::Config::new,
-                // According to the comment, https://github.com/contrun/ckb/commit/0567f1a203fae9c7389109de93864cfb20cb9f80#r135680667
-                // The default config is not optimal.
-                // TODO: Do some benchmark and change this parameter.
-                yamux::Config::default,
-            )
-            .expect("Create tcp transport")
-            .with_behaviour(|key| MyBehaviour {
-                identify: identify::Behaviour::new(identify::Config::new(
-                    format!("{}/{}/0.0.1", network_identification, client_version),
-                    key.public(),
-                )),
-                ping: ping_behaviour,
-                disconnect_message: disconenct_message_behaviour,
-                sync: sync_behaviour,
-            })
-            .expect("Create behaviour")
-            .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(3600)))
-            .build();
-
-        let libp2p_port = std::env::var("LIBP2P_PORT")
-            .unwrap_or_default()
-            .parse::<i16>()
-            .unwrap_or_default();
-        let (command_sender, command_receiver) = mpsc::channel(100);
-        let mut service = NetworkService {
-            swarm,
-            network_state,
-            command_receiver,
-        };
-
+    let sync_supported = supported_protocols.contains(&SupportProtocols::Sync);
+    let sync_behaviour = Toggle::from(if sync_supported {
+        Some(request_response::cbor::Behaviour::new(
+            [(
+                StreamProtocol::try_from_owned(SupportProtocols::Sync.name())
+                    .expect("Protocol of Sync name start with /"),
+                ProtocolSupport::Full,
+            )],
+            request_response::Config::default(),
+        ))
+    } else {
+        None
+    });
+    if sync_supported {
+        let command_sender = command_sender.clone();
         handle.spawn_task(async move {
+            let mut interval = time::interval(Duration::from_secs(1));
+            let rx = new_tokio_exit_rx();
+            loop {
+                select! {
+                    _ = interval.tick() => {
+                        command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
+                    },
+                    _ = rx.cancelled() => {
+                        info!("Exit signal received, exit now");
+                        break
+                    },
+                }
+            }
+        });
+    }
+
+    let swarm = libp2p::SwarmBuilder::with_existing_identity(keypair)
+        .with_tokio()
+        .with_tcp(
+            tcp::Config::default(),
+            noise::Config::new,
+            // According to the comment, https://github.com/contrun/ckb/commit/0567f1a203fae9c7389109de93864cfb20cb9f80#r135680667
+            // The default config is not optimal.
+            // TODO: Do some benchmark and change this parameter.
+            yamux::Config::default,
+        )
+        .expect("Create tcp transport")
+        .with_behaviour(|key| MyBehaviour {
+            identify: identify::Behaviour::new(identify::Config::new(
+                format!("{}/{}/0.0.1", network_identification, client_version),
+                key.public(),
+            )),
+            ping: ping_behaviour,
+            disconnect_message: disconenct_message_behaviour,
+            sync: sync_behaviour,
+        })
+        .expect("Create behaviour")
+        .with_swarm_config(|cfg| cfg.with_idle_connection_timeout(Duration::from_secs(3600)))
+        .build();
+
+    swarm
+}
+
+impl NetworkController {
+    pub fn new<NST: NetworkServiceTrait>(
+        handle: &Handle,
+        network_state: <NST as NetworkServiceTrait>::State,
+        swarm: Swarm<<NST as NetworkServiceTrait>::Behaviour>,
+        command_sender: mpsc::Sender<Command>,
+        command_receiver: mpsc::Receiver<Command>,
+    ) -> Result<Self, Error> {
+        handle.spawn_task(async move {
+            let mut swarm = swarm;
+            let libp2p_port = std::env::var("LIBP2P_PORT")
+                .unwrap_or_default()
+                .parse::<i16>()
+                .unwrap_or_default();
+
             let addr = format!("/ip4/0.0.0.0/tcp/{}", libp2p_port);
             // Note that although listen_on is not an async function,
             // it actually requires a runtime, so we must call it within a handle.spawn_task.
-            let result = service
-                .swarm
-                .listen_on(addr.parse().expect("Correct multiaddr"));
+            let result = swarm.listen_on(addr.parse().expect("Correct multiaddr"));
             let _ = result.expect("libp2p listen succeed");
-            info!(
-                "libp2p listen on {}/p2p/{}",
-                addr,
-                service.swarm.local_peer_id()
-            );
+            info!("libp2p listen on {}/p2p/{}", addr, swarm.local_peer_id());
+            let service = NST::new(swarm, network_state, command_receiver);
             service.run().await;
         });
 
-        if sync_supported {
-            let command_sender = command_sender.clone();
-            handle.spawn_task(async move {
-                let mut interval = time::interval(Duration::from_secs(1));
-                let rx = new_tokio_exit_rx();
-                loop {
-                    select! {
-                        _ = interval.tick() => {
-                            command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
-                        },
-                        _ = rx.cancelled() => {
-                            info!("Exit signal received, exit now");
-                            break
-                        },
-                    }    
-                }
-            });
-        }
         Ok(NetworkController {
             handle: handle.clone(),
             command_sender,

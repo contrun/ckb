@@ -312,9 +312,10 @@ impl NetworkState {
                 }
             })
             .chain(listened_addrs.iter().map(|addr| (addr.to_owned(), 1)))
-            .map(|(addr, score)| 
-            // TODO: We need also to consider libp2p address here
-            (TentacleMultiaddr::from(addr).to_string(), score))
+            .map(|(addr, score)| {
+                // TODO: We need also to consider libp2p address here
+                (TentacleMultiaddr::from(addr).to_string(), score)
+            })
             .collect()
     }
 
@@ -355,7 +356,7 @@ impl NetworkState {
             return false;
         }
 
-        // Tentacle specific logic to check if we have already connnected to peer. 
+        // Tentacle specific logic to check if we have already connnected to peer.
         match peer_id {
             PeerId::Tentacle(peer_id) => {
                 let peer_in_registry = self.with_peer_registry(|reg| {
@@ -365,9 +366,8 @@ impl NetworkState {
                     trace!("Do not dial peer in registry: {:?}, {:?}", peer_id, addr);
                     return false;
                 }
-        
-            },
-            _ =>  {}
+            }
+            _ => {}
         }
 
         if let Some(dial_started) = self.dialing_addrs.read().get(peer_id) {
@@ -647,23 +647,23 @@ impl NetworkController {
         match peer_id {
             PeerId::Tentacle(peer_id) => {
                 if let Some(session_id) = self
-                .must_get_tentacle_controller()
-                .network_state
-                .peer_registry
-                .read()
-                .get_key_by_peer_id(peer_id)
-            {
-                if let Err(err) = tentacle_disconnect_with_message(
-                    self.p2p_control(),
-                    session_id,
-                    "disconnect manually",
-                ) {
-                    debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
+                    .must_get_tentacle_controller()
+                    .network_state
+                    .peer_registry
+                    .read()
+                    .get_key_by_peer_id(peer_id)
+                {
+                    if let Err(err) = tentacle_disconnect_with_message(
+                        self.p2p_control(),
+                        session_id,
+                        "disconnect manually",
+                    ) {
+                        debug!("Disconnect failed {:?}, error: {:?}", session_id, err);
+                    }
+                } else {
+                    error!("Cannot find peer {:?}", peer_id);
                 }
-            } else {
-                error!("Cannot find peer {:?}", peer_id);
             }
-            },
             PeerId::Libp2p(_) => todo!("remove_node for libp2p not implemented"),
         }
     }
@@ -739,12 +739,13 @@ impl NetworkController {
                     .ban_session(self.p2p_control(), s, duration, reason);
             }
             PeerIndex::Libp2p(peer_id) => {
-                self.must_get_libp2p_controller().command_sender.try_send(
-                    libp2p::Command::Disconnect {
+                self.must_get_libp2p_controller()
+                    .command_sender
+                    .try_send(libp2p::Command::Disconnect {
                         peer: peer_id,
                         message: "".to_string(),
-                    },
-                ).expect("command receiver not closed");
+                    })
+                    .expect("command receiver not closed");
             }
         }
     }
@@ -758,7 +759,8 @@ impl NetworkController {
                     .iter()
                     .for_each(|(peer_index, peer)| match peer_index {
                         PeerIndex::Tentacle(peer_index) => {
-                            if let Some(addr) = multiaddr_to_socketaddr(&peer.connected_addr.clone().into())
+                            if let Some(addr) =
+                                multiaddr_to_socketaddr(&peer.connected_addr.clone().into())
                             {
                                 if address.contains(addr.ip()) {
                                     let _ = tentacle_disconnect_with_message(

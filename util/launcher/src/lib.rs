@@ -5,6 +5,7 @@
 use ckb_app_config::{
     BlockAssemblerConfig, ExitCode, RpcConfig, RpcModule, RunArgs, SupportProtocol,
 };
+use ckb_async_runtime::tokio::sync::mpsc;
 use ckb_async_runtime::Handle;
 use ckb_block_filter::filter::BlockFilter as BlockFilterService;
 use ckb_build_info::Version;
@@ -13,7 +14,7 @@ use ckb_channel::Receiver;
 use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
-use ckb_network::libp2p::NetworkController as Libp2pNetworkController;
+use ckb_network::libp2p::{new_swarm, NetworkController as Libp2pNetworkController, NetworkService};
 use ckb_network::{
     observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
     SupportProtocols, TentacleNetworkService,
@@ -292,13 +293,22 @@ impl Launcher {
 
         let required_protocols = vec![SupportProtocols::Sync];
 
-        let libp2p_network_controller = Libp2pNetworkController::new(
-            shared.async_handle(),
+        let (command_sender, command_receiver) = mpsc::channel(100);
+        let swarm = new_swarm(
+            shared.async_handle().clone(),
             shared.consensus().identify_name(),
             self.version.to_string(),
             Arc::clone(&network_state),
             &support_protocols,
             &required_protocols,
+            command_sender.clone(),
+        );
+        let libp2p_network_controller = Libp2pNetworkController::new::<NetworkService>(
+            shared.async_handle(),
+            Arc::clone(&network_state),
+            swarm,
+            command_sender,
+            command_receiver,
         )
         .expect("Start libp2p service failed");
 
