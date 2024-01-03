@@ -13,13 +13,12 @@ use ckb_network::libp2p::{
     request_response::{self, ProtocolSupport},
     serde,
     swarm::behaviour::toggle::Toggle,
+    swarm::NetworkBehaviour,
     swarm::SwarmEvent,
-    tcp, yamux, Command, Deserialize, NetworkServiceTrait, PeerId, Serialize,
-    StreamProtocol, Swarm, SwarmBuilder,
-    swarm::NetworkBehaviour
+    tcp, yamux, Command, Deserialize, NetworkServiceTrait, PeerId, Serialize, StreamProtocol,
+    Swarm, SwarmBuilder,
 };
 use core::time::Duration;
-
 
 use ckb_network::tokio::{select, sync::mpsc, time};
 use ckb_spawn::Spawn;
@@ -227,10 +226,7 @@ impl NetworkServiceTrait for NetworkService {
                     }
                     Ok(duration) => {
                         // TODO: save ping result to peer_store
-                        info!(
-                            "Ping peer {} with duration {:?} success",
-                            peer, duration
-                        );
+                        info!("Ping peer {} with duration {:?} success", peer, duration);
                     }
                 }
             }
@@ -240,7 +236,7 @@ impl NetworkServiceTrait for NetworkService {
                     identify::Event::Received { peer_id, info } => {
                         // NOTE: be careful, here easy cause a deadlock,
                         //    because peer_store's lock scope across peer_registry's lock scope
-                        
+
                         // TODO: we should use peer_store to store peer info
                         info!("Received identify event from peer {:?} {:?}", peer_id, info);
                     }
