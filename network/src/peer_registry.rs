@@ -139,7 +139,10 @@ impl PeerRegistry {
 
         let mut addr = info.observed_addr.clone();
         addr.push(libp2p::multiaddr::Protocol::P2p(peer_id));
-        info!("Adding peer to peer store {:?} {:?}", &info.observed_addr, &addr);
+        info!(
+            "Adding peer to peer store {:?} {:?}",
+            &info.observed_addr, &addr
+        );
         peer_store.add_connected_peer((&addr).into());
         let peer = Peer::new(index, ConnectionType::Unknown, addr, false);
         self.peers.insert(index, peer);

@@ -106,7 +106,7 @@ impl ProtocolTypeCheckerService {
                                 debug!("Disconnect failed {session_id:?}, error: {err:?}");
                             }
                         }
-                        PeerIndex::Libp2p(_) => {},
+                        PeerIndex::Libp2p(_) => {}
                     }
                 }
             }

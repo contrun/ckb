@@ -24,7 +24,7 @@ use self::{
     protocol::{decode, encode},
     state::RemoteAddress,
 };
-use crate::{Flags, NetworkState, ProtocolId, peer::PeerType};
+use crate::{peer::PeerType, Flags, NetworkState, ProtocolId};
 
 mod addr;
 pub(crate) mod protocol;
@@ -348,9 +348,9 @@ impl AddressManager for DiscoveryAddressManager {
     }
 
     fn get_random(&mut self, n: usize, flags: Flags) -> Vec<(Multiaddr, Flags)> {
-        let fetch_random_addrs = self
-            .network_state
-            .with_peer_store_mut(|peer_store| peer_store.fetch_random_addrs(n, flags, PeerType::Tentacle));
+        let fetch_random_addrs = self.network_state.with_peer_store_mut(|peer_store| {
+            peer_store.fetch_random_addrs(n, flags, PeerType::Tentacle)
+        });
         let addrs = fetch_random_addrs
             .into_iter()
             .filter_map(|paddr| {

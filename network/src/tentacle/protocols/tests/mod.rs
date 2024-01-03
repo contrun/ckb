@@ -7,8 +7,9 @@ use super::{
 };
 
 use crate::{
-    network::TentacleEventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
-    NetworkState, PeerIdentifyInfo, SupportProtocols, PeerIndex, peer::PeerType,
+    network::TentacleEventHandler, peer::PeerType,
+    services::protocol_type_checker::ProtocolTypeCheckerService, NetworkState, PeerIdentifyInfo,
+    PeerIndex, SupportProtocols,
 };
 
 use std::{

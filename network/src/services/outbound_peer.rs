@@ -1,6 +1,7 @@
 use crate::{
+    peer::PeerType,
     peer_store::{types::AddrInfo, PeerStore},
-    Multiaddr, NetworkState, peer::PeerType,
+    Multiaddr, NetworkState,
 };
 use ckb_logger::trace;
 use ckb_systemtime::unix_time_as_millis;
@@ -47,7 +48,8 @@ impl OutboundPeerService {
     fn dial_feeler(&mut self) {
         let now_ms = unix_time_as_millis();
         let attempt_peers = self.network_state.with_peer_store_mut(|peer_store| {
-            let paddrs = peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT, PeerType::Tentacle);
+            let paddrs =
+                peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT, PeerType::Tentacle);
             for paddr in paddrs.iter() {
                 // mark addr as tried
                 if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
@@ -83,7 +85,8 @@ impl OutboundPeerService {
         let target = &self.network_state.required_flags;
 
         let f = |peer_store: &mut PeerStore, number: usize, now_ms: u64| -> Vec<AddrInfo> {
-            let paddrs = peer_store.fetch_addrs_to_attempt(number, Some(*target), PeerType::Tentacle);
+            let paddrs =
+                peer_store.fetch_addrs_to_attempt(number, Some(*target), PeerType::Tentacle);
             for paddr in paddrs.iter() {
                 // mark addr as tried
                 if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
@@ -140,7 +143,8 @@ impl OutboundPeerService {
 
     fn try_dial_whitelist(&self) {
         for addr in self.network_state.config.whitelist_peers() {
-            self.network_state.dial_identify(&self.p2p_control, addr.into());
+            self.network_state
+                .dial_identify(&self.p2p_control, addr.into());
         }
     }
 
