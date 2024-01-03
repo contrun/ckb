@@ -36,6 +36,11 @@ ckb-stop-handler = { path = "../stop-handler", version = "= 0.113.0-pre" }
 ckb-spawn = { path = "../spawn", version = "= 0.113.0-pre" }
 # for derive macro
 libp2p = { version="0.53.1", features = ["macros", "noise", "identify", "request-response", "cbor", "ping", "tcp", "tokio", "yamux"] }
+smallvec = "1.11.2"
+futures-bounded = "0.2.3"
+void = "1.0.2"
+cbor4ii = "0.3.2"
+serde_json = "1.0.110"
 
 [features]
 with_sentry = [ "ckb-sync/with_sentry", "ckb-network/with_sentry", "ckb-app-config/with_sentry" ]

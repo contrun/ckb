@@ -56,6 +56,7 @@ pub use p2p::{
     ProtocolId, SessionId, SessionId as TentacleSessionId,
 };
 pub use tokio;
+pub use serde::{self, Deserialize, Serialize};
 
 /// Protocol version used by network protocol open
 pub type ProtocolVersion = String;

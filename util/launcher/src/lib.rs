@@ -2,7 +2,7 @@
 //!
 //! ckb launcher is helps to launch ckb node.
 
-mod temp;
+pub mod temp;
 
 use ckb_app_config::{
     BlockAssemblerConfig, ExitCode, RpcConfig, RpcModule, RunArgs, SupportProtocol,
