@@ -46,7 +46,7 @@ pub struct MyBehaviour {
     identify: identify::Behaviour,
     ping: Toggle<ping::Behaviour>,
     disconnect_message: Toggle<
-        request_response::cbor::Behaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
+        reqresp::CborBehaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
     >,
     sync: Toggle<request_response::cbor::Behaviour<SyncRequest, SyncResponse>>,
 }
@@ -87,13 +87,13 @@ pub fn new_swarm(
     let disconnect_message_supported =
         supported_protocols.contains(&SupportProtocols::DisconnectMessage);
     let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
-        Some(request_response::cbor::Behaviour::new(
+        Some(reqresp::CborBehaviour::new(
             [(
                 StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
                     .expect("Protocol of DisconnectMessage name start with /"),
-                ProtocolSupport::Full,
+                reqresp::ProtocolSupport::Full,
             )],
-            request_response::Config::default(),
+            reqresp::Config::default(),
         ))
     } else {
         None
@@ -246,9 +246,9 @@ impl NetworkServiceTrait for NetworkService {
                 }
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::Message { message, peer },
+                reqresp::Event::Message { message, peer },
             )) => match message {
-                request_response::Message::Request {
+                reqresp::Message::Request {
                     request, channel, ..
                 } => {
                     info!(
@@ -266,7 +266,7 @@ impl NetworkServiceTrait for NetworkService {
                         .send_response(channel, DisconnectMessageResponse("Ok, bye".to_string()));
                     let _ = self.swarm.disconnect_peer_id(peer);
                 }
-                request_response::Message::Response {
+                reqresp::Message::Response {
                     request_id,
                     response,
                 } => {
@@ -307,7 +307,7 @@ impl NetworkServiceTrait for NetworkService {
                 }
             },
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::OutboundFailure {
+                reqresp::Event::OutboundFailure {
                     request_id, error, ..
                 },
             )) => {
@@ -317,7 +317,7 @@ impl NetworkServiceTrait for NetworkService {
                 );
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::ResponseSent { .. },
+                reqresp::Event::ResponseSent { .. },
             )) => {}
             other => {
                 debug!("Unhandled {:?}", other);
