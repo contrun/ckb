@@ -71,7 +71,7 @@ pub struct NetworkState {
     pub(crate) local_private_key: secio::SecioKeyPair,
     local_peer_id: PeerId,
     pub(crate) bootnodes: Vec<Multiaddr>,
-    pub(crate) config: NetworkConfig,
+    pub config: NetworkConfig,
     pub(crate) active: AtomicBool,
     /// Node supported protocols
     /// fields: ProtocolId, Protocol Name, Supported Versions
@@ -360,7 +360,7 @@ impl NetworkState {
         match peer_id {
             PeerId::Tentacle(peer_id) => {
                 let peer_in_registry = self.with_peer_registry(|reg| {
-                    reg.get_key_by_peer_id(peer_id).is_some() || reg.is_feeler(&addr)
+                    reg.get_key_by_peer_id(peer_id).is_some() || reg.is_feeler(addr)
                 });
                 if peer_in_registry {
                     trace!("Do not dial peer in registry: {:?}, {:?}", peer_id, addr);
@@ -408,7 +408,7 @@ impl NetworkState {
 
     pub(crate) fn dial_failed(&self, addr: &Multiaddr) {
         self.with_peer_registry_mut(|reg| {
-            reg.remove_feeler(&addr);
+            reg.remove_feeler(addr);
         });
 
         if let Ok(peer_id) = PeerId::try_from(addr) {
@@ -458,7 +458,7 @@ impl NetworkState {
             debug!("dial_feeler error {err}");
         } else {
             self.with_peer_registry_mut(|reg| {
-                reg.add_feeler(&addr.into());
+                reg.add_feeler(&addr);
             });
         }
     }
@@ -694,13 +694,13 @@ impl NetworkController {
             .peer_store
             .lock()
             .addr_manager()
-            .get(&addr)
+            .get(addr)
             .cloned()
     }
 
     /// Ban an ip
     pub fn ban(&self, address: IpNetwork, ban_until: u64, ban_reason: &str) {
-        self.disconnect_peers_in_ip_range(address, &ban_reason);
+        self.disconnect_peers_in_ip_range(address, ban_reason);
         self.must_get_tentacle_controller()
             .network_state
             .peer_store

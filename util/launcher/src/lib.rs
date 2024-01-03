@@ -2,6 +2,8 @@
 //!
 //! ckb launcher is helps to launch ckb node.
 
+mod temp;
+
 use ckb_app_config::{
     BlockAssemblerConfig, ExitCode, RpcConfig, RpcModule, RunArgs, SupportProtocol,
 };
@@ -14,9 +16,8 @@ use ckb_channel::Receiver;
 use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
-use ckb_network::libp2p::{new_swarm, NetworkController as Libp2pNetworkController, NetworkService};
 use ckb_network::{
-    observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
+    libp2p::NetworkController as Libp2pNetworkController, observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
     SupportProtocols, TentacleNetworkService,
 };
 use ckb_network_alert::alert_relayer::AlertRelayer;
@@ -33,6 +34,7 @@ use ckb_types::prelude::*;
 use ckb_verification::GenesisVerifier;
 use ckb_verification_traits::Verifier;
 use std::sync::Arc;
+use temp::libp2p::{new_swarm, NetworkService};
 
 const SECP256K1_BLAKE160_SIGHASH_ALL_ARG_LEN: usize = 20;
 

@@ -1064,12 +1064,15 @@ dependencies = [
  "ckb-resource",
  "ckb-rpc",
  "ckb-shared",
+ "ckb-spawn",
+ "ckb-stop-handler",
  "ckb-store",
  "ckb-sync",
  "ckb-tx-pool",
  "ckb-types",
  "ckb-verification",
  "ckb-verification-traits",
+ "libp2p",
 ]
 
 [[package]]

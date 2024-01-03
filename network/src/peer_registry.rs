@@ -124,7 +124,7 @@ impl PeerRegistry {
         Ok(evicted_peer)
     }
 
-    pub(crate) fn accept_libp2p_peer(
+    pub fn accept_libp2p_peer(
         &mut self,
         peer_id: Libp2pPeerId,
         info: Libp2pIdentifyInfo,

@@ -613,7 +613,7 @@ impl NetworkService {
                 peer_store
                     .fetch_addrs_to_attempt(count, Some(*target), PeerType::Tentacle)
                     .into_iter()
-                    .map(|paddr| paddr.addr.into())
+                    .map(|paddr| paddr.addr)
                     .collect::<Vec<_>>(),
             );
             // Get bootnodes randomly

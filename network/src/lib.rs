@@ -6,6 +6,11 @@
 //! And implemented several basic protocols: identify, discovery, ping, feeler, disconnect_message
 //!
 
+// Just to conviniently use the derive macro NetworkBehaviour.
+#[allow(unused_imports)]
+#[macro_use]
+extern crate libp2p as backend_libp2p;
+
 mod behaviour;
 mod command;
 /// compress module
@@ -14,7 +19,7 @@ pub mod errors;
 pub mod libp2p;
 pub mod network;
 mod network_group;
-mod peer;
+pub mod peer;
 pub mod peer_registry;
 pub mod peer_store;
 mod services;

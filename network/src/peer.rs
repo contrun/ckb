@@ -47,7 +47,7 @@ impl From<&PeerId> for TentaclePeerId {
 impl From<&PeerId> for Libp2pPeerId {
     fn from(value: &PeerId) -> Self {
         match value {
-            PeerId::Libp2p(l) => l.clone(),
+            PeerId::Libp2p(l) => *l,
             _ => panic!("Unexpected address format, expecting tentacle address"),
         }
     }
@@ -61,7 +61,7 @@ impl From<&TentaclePeerId> for PeerId {
 
 impl From<&Libp2pPeerId> for PeerId {
     fn from(value: &Libp2pPeerId) -> Self {
-        PeerId::Libp2p(value.clone())
+        PeerId::Libp2p(*value)
     }
 }
 
@@ -116,8 +116,8 @@ impl TryFrom<&Multiaddr> for SocketAddr {
                     _ => None,
                 });
                 let port = iter.next().and_then(|p| match p {
-                    Protocol::Udp(port) => Some(port.into()),
-                    Protocol::Tcp(port) => Some(port.into()),
+                    Protocol::Udp(port) => Some(port),
+                    Protocol::Tcp(port) => Some(port),
                     _ => None,
                 });
                 ip_addr
@@ -217,7 +217,7 @@ impl TryFrom<&Multiaddr> for PeerId {
     type Error = String;
     fn try_from(value: &Multiaddr) -> Result<Self, Self::Error> {
         match value {
-            Multiaddr::Tentacle(t) => match extract_peer_id(&t) {
+            Multiaddr::Tentacle(t) => match extract_peer_id(t) {
                 Some(peer_id) => Ok(PeerId::Tentacle(peer_id)),
                 _ => Err("Failed to extract tentacle peer id".to_string()),
             },

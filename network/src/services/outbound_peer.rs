@@ -67,7 +67,7 @@ impl OutboundPeerService {
 
         for addr in attempt_peers.into_iter().map(|info| info.addr) {
             self.network_state
-                .dial_feeler(&self.p2p_control, addr.into());
+                .dial_feeler(&self.p2p_control, addr);
         }
     }
 

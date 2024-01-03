@@ -47,10 +47,10 @@ impl PeerStore {
         {
             Entry::Occupied(mut entry) => {
                 let peer = entry.get_mut();
-                peer.connected_addr = addr.into();
+                peer.connected_addr = addr;
             }
             Entry::Vacant(entry) => {
-                let peer = PeerInfo::new(addr.into());
+                let peer = PeerInfo::new(addr);
                 entry.insert(peer);
             }
         }
@@ -85,7 +85,7 @@ impl PeerStore {
 
     /// Update outbound peer last connected ms
     pub fn update_outbound_addr_last_connected_ms(&mut self, addr: &Multiaddr) {
-        if self.ban_list.is_addr_banned(&addr) {
+        if self.ban_list.is_addr_banned(addr) {
             return;
         }
         if let Some(info) = self.addr_manager.get_mut(addr) {
