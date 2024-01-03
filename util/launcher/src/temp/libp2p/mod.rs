@@ -1,5 +1,7 @@
 pub mod reqresp;
 
+pub mod sync;
+
 use ckb_network::NetworkState;
 
 use ckb_network::SupportProtocols;
@@ -7,23 +9,20 @@ use ckb_network::SupportProtocols;
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace};
 use ckb_network::async_trait;
-use ckb_stop_handler::new_tokio_exit_rx;
+use ckb_sync::Synchronizer;
 
+use ::libp2p::request_response::{
+    Config as ReqRespConfig, Event as ReqRespEvent, Message as ReqRespMessage,
+    ProtocolSupport as ReqRespProtocolSupport,
+};
 use ckb_network::libp2p::{
-    futures::StreamExt,
-    identify, identity, noise, ping,
-    request_response::{self, ProtocolSupport},
-    serde,
-    swarm::behaviour::toggle::Toggle,
-    swarm::NetworkBehaviour,
-    swarm::SwarmEvent,
-    tcp, yamux, Command, Deserialize, NetworkServiceTrait, PeerId, Serialize, StreamProtocol,
-    Swarm, SwarmBuilder,
+    futures::StreamExt, identify, identity, noise, ping, serde, swarm::behaviour::toggle::Toggle,
+    swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, Command, Deserialize,
+    NetworkServiceTrait, PeerId, Serialize, StreamProtocol, Swarm, SwarmBuilder,
 };
 use core::time::Duration;
 
-use ckb_network::tokio::{select, sync::mpsc, time};
-use ckb_spawn::Spawn;
+use ckb_network::tokio::{select, sync::mpsc};
 
 use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -46,9 +45,12 @@ pub struct MyBehaviour {
     identify: identify::Behaviour,
     ping: Toggle<ping::Behaviour>,
     disconnect_message: Toggle<
-        request_response::cbor::Behaviour<DisconnectMessageRequest, DisconnectMessageResponse>,
+        libp2p::request_response::cbor::Behaviour<
+            DisconnectMessageRequest,
+            DisconnectMessageResponse,
+        >,
     >,
-    sync: Toggle<request_response::cbor::Behaviour<SyncRequest, SyncResponse>>,
+    sync: Toggle<sync::CborBehaviour<SyncRequest, SyncResponse>>,
 }
 
 pub fn new_swarm(
@@ -58,7 +60,7 @@ pub fn new_swarm(
     network_state: Arc<NetworkState>,
     supported_protocols: &[SupportProtocols],
     _required_protocol_ids: &[SupportProtocols],
-    command_sender: mpsc::Sender<Command>,
+    synchronizer: Synchronizer,
 ) -> Swarm<MyBehaviour> {
     info!("supported protocols {:?}", supported_protocols);
     let priv_key_bytes: [u8; 32] = network_state
@@ -87,13 +89,13 @@ pub fn new_swarm(
     let disconnect_message_supported =
         supported_protocols.contains(&SupportProtocols::DisconnectMessage);
     let disconenct_message_behaviour = Toggle::from(if disconnect_message_supported {
-        Some(request_response::cbor::Behaviour::new(
+        Some(libp2p::request_response::cbor::Behaviour::new(
             [(
                 StreamProtocol::try_from_owned(SupportProtocols::DisconnectMessage.name())
                     .expect("Protocol of DisconnectMessage name start with /"),
-                ProtocolSupport::Full,
+                ReqRespProtocolSupport::Full,
             )],
-            request_response::Config::default(),
+            ReqRespConfig::default(),
         ))
     } else {
         None
@@ -101,35 +103,18 @@ pub fn new_swarm(
 
     let sync_supported = supported_protocols.contains(&SupportProtocols::Sync);
     let sync_behaviour = Toggle::from(if sync_supported {
-        Some(request_response::cbor::Behaviour::new(
+        Some(sync::CborBehaviour::new(
             [(
                 StreamProtocol::try_from_owned(SupportProtocols::Sync.name())
                     .expect("Protocol of Sync name start with /"),
-                ProtocolSupport::Full,
+                sync::ProtocolSupport::Full,
             )],
-            request_response::Config::default(),
+            sync::Config::default(),
+            synchronizer,
         ))
     } else {
         None
     });
-    if sync_supported {
-        let command_sender = command_sender.clone();
-        handle.spawn_task(async move {
-            let mut interval = time::interval(Duration::from_secs(1));
-            let rx = new_tokio_exit_rx();
-            loop {
-                select! {
-                    _ = interval.tick() => {
-                        command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
-                    },
-                    _ = rx.cancelled() => {
-                        info!("Exit signal received, exit now");
-                        break
-                    },
-                }
-            }
-        });
-    }
 
     let swarm = SwarmBuilder::with_existing_identity(keypair)
         .with_tokio()
@@ -245,10 +230,11 @@ impl NetworkServiceTrait for NetworkService {
                     _ => {}
                 }
             }
-            SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::Message { message, peer },
-            )) => match message {
-                request_response::Message::Request {
+            SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(ReqRespEvent::Message {
+                message,
+                peer,
+            })) => match message {
+                ReqRespMessage::Request {
                     request, channel, ..
                 } => {
                     info!(
@@ -266,7 +252,7 @@ impl NetworkServiceTrait for NetworkService {
                         .send_response(channel, DisconnectMessageResponse("Ok, bye".to_string()));
                     let _ = self.swarm.disconnect_peer_id(peer);
                 }
-                request_response::Message::Response {
+                ReqRespMessage::Response {
                     request_id,
                     response,
                 } => {
@@ -276,11 +262,11 @@ impl NetworkServiceTrait for NetworkService {
                     );
                 }
             },
-            SwarmEvent::Behaviour(MyBehaviourEvent::Sync(request_response::Event::Message {
+            SwarmEvent::Behaviour(MyBehaviourEvent::Sync(sync::Event::Message {
                 message,
                 peer,
             })) => match message {
-                request_response::Message::Request {
+                sync::Message::Request {
                     request, channel, ..
                 } => {
                     info!(
@@ -296,7 +282,7 @@ impl NetworkServiceTrait for NetworkService {
 
                     let _ = sync.send_response(channel, SyncResponse("Got you".to_string()));
                 }
-                request_response::Message::Response {
+                sync::Message::Response {
                     request_id,
                     response,
                 } => {
@@ -307,7 +293,7 @@ impl NetworkServiceTrait for NetworkService {
                 }
             },
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::OutboundFailure {
+                ReqRespEvent::OutboundFailure {
                     request_id, error, ..
                 },
             )) => {
@@ -317,7 +303,7 @@ impl NetworkServiceTrait for NetworkService {
                 );
             }
             SwarmEvent::Behaviour(MyBehaviourEvent::DisconnectMessage(
-                request_response::Event::ResponseSent { .. },
+                ReqRespEvent::ResponseSent { .. },
             )) => {}
             other => {
                 debug!("Unhandled {:?}", other);

@@ -17,8 +17,8 @@ use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
 use ckb_network::{
-    libp2p::NetworkController as Libp2pNetworkController, observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkState,
-    SupportProtocols, TentacleNetworkService,
+    libp2p::NetworkController as Libp2pNetworkController, observe_listen_port_occupancy,
+    CKBProtocol, Flags, NetworkController, NetworkState, SupportProtocols, TentacleNetworkService,
 };
 use ckb_network_alert::alert_relayer::AlertRelayer;
 use ckb_proposal_table::ProposalTable;
@@ -270,6 +270,9 @@ impl Launcher {
             self.args.config.tmp_dir.as_ref(),
             relay_tx_receiver,
         ));
+        // Sync is a core protocol, user cannot disable it via config
+        let synchronizer = Synchronizer::new(chain_controller.clone(), Arc::clone(&sync_shared));
+
         let fork_enable = {
             let epoch = shared.snapshot().tip_header().epoch().number();
             shared
@@ -303,7 +306,7 @@ impl Launcher {
             Arc::clone(&network_state),
             &support_protocols,
             &required_protocols,
-            command_sender.clone(),
+            synchronizer.clone(),
         );
         let libp2p_network_controller = Libp2pNetworkController::new::<NetworkService>(
             shared.async_handle(),
@@ -316,12 +319,9 @@ impl Launcher {
 
         // TODO: make alert_notifier, alert_verifier independent of tentacle.
         let (tentacle_network_controller, alert_notifier, alert_verifier) = {
-            // Sync is a core protocol, user cannot disable it via config
-            let synchronizer =
-                Synchronizer::new(chain_controller.clone(), Arc::clone(&sync_shared));
             let mut protocols = vec![CKBProtocol::new_with_support_protocol(
                 SupportProtocols::Sync,
-                Box::new(synchronizer),
+                Box::new(synchronizer.clone()),
                 Arc::clone(&network_state),
             )];
 

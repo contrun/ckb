@@ -238,6 +238,7 @@ impl BlockFetchCMD {
 }
 
 /// Sync protocol handle
+#[derive(Clone)]
 pub struct Synchronizer {
     pub(crate) chain: ChainController,
     /// Sync shared state
