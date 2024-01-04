@@ -16,6 +16,7 @@ use ckb_channel::Receiver;
 use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
+use ckb_network::CommandSender;
 use ckb_network::{
     libp2p::NetworkController as Libp2pNetworkController, observe_listen_port_occupancy,
     CKBProtocol, Flags, NetworkController, NetworkState, SupportProtocols, TentacleNetworkService,
@@ -307,6 +308,8 @@ impl Launcher {
             &support_protocols,
             &required_protocols,
             synchronizer.clone(),
+            CommandSender::default()
+                .with_mpsc_sender(command_sender.clone())
         );
         let libp2p_network_controller = Libp2pNetworkController::new::<NetworkService>(
             shared.async_handle(),

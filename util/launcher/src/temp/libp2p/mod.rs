@@ -2,8 +2,11 @@ pub mod reqresp;
 
 pub mod sync;
 
+use ckb_network::CommandSender;
+use ckb_network::Multiaddr;
 use ckb_network::NetworkState;
 
+use ckb_network::PeerIndex;
 use ckb_network::SupportProtocols;
 
 use ckb_async_runtime::Handle;
@@ -61,6 +64,7 @@ pub fn new_swarm(
     supported_protocols: &[SupportProtocols],
     _required_protocol_ids: &[SupportProtocols],
     synchronizer: Synchronizer,
+    command_sender: CommandSender,
 ) -> Swarm<MyBehaviour> {
     info!("supported protocols {:?}", supported_protocols);
     let priv_key_bytes: [u8; 32] = network_state
@@ -111,6 +115,7 @@ pub fn new_swarm(
             )],
             sync::Config::default(),
             synchronizer,
+            command_sender,
         ))
     } else {
         None
@@ -314,13 +319,34 @@ impl NetworkServiceTrait for NetworkService {
     async fn handle_command(&mut self, command: Command) {
         match command {
             Command::Dial { multiaddr } => {
+                let multiaddr = match multiaddr {
+                    Multiaddr::Libp2p(multiaddr) => multiaddr,
+                    Multiaddr::Tentacle(multiaddr) => {
+                        error!(
+                            "Trying to dial tentacle peer {} while libp2p address is expected",
+                            multiaddr
+                        );
+                        return;
+                    }
+                };
+
                 if let Err(error) = self.swarm.dial(multiaddr.clone()) {
-                    error!("Dialing libp2p peer {} failed: {}", multiaddr, error);
+                    error!("Dialing libp2p peer {} failed: {}", &multiaddr, error);
                 } else {
-                    info!("Dialing libp2p peer {} succeeded", multiaddr);
+                    info!("Dialing libp2p peer {} succeeded", &multiaddr);
                 }
             }
             Command::Disconnect { peer, message } => {
+                let peer: PeerId = match peer {
+                    PeerIndex::Libp2p(peer_id) => peer_id,
+                    PeerIndex::Tentacle(peer_id) => {
+                        error!(
+                            "Trying to disconnect tentacle peer {} while libp2p peer is expected",
+                            peer_id
+                        );
+                        return;
+                    }
+                };
                 let disconnect_message = &mut self.swarm.behaviour_mut().disconnect_message;
                 if !disconnect_message.is_enabled() {
                     return;
@@ -334,22 +360,8 @@ impl NetworkServiceTrait for NetworkService {
                     peer, request_id
                 );
             }
-            Command::GetHeader => {
-                info!("GetHeader command received, trying to send sync request");
-                let sync = &mut self.swarm.behaviour_mut().sync;
-                if !sync.is_enabled() {
-                    return;
-                }
-                let sync = sync.as_mut().unwrap();
-
-                // TODO: get peers from peer_store
-                let peers: Vec<PeerId> = vec![];
-                info!("Fetched peers from network state {:?}", peers);
-                for peer in peers {
-                    let request_id =
-                        &sync.send_request(&peer, SyncRequest("hello world".to_string()));
-                    info!("Sync message send to {}, request_id {:?}", peer, request_id);
-                }
+            _ => {
+                todo!("handle command {:?}", command);
             }
         }
     }

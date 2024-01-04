@@ -203,7 +203,7 @@ impl<'a> HeadersProcess<'a> {
         {
             debug!("Disconnect peer({}) is unprotected outbound", self.peer);
             if let Err(err) = self.command_sender.send(Command::Disconnect {
-                peer_index: self.peer,
+                peer: self.peer,
                 message: "useless outbound peer in IBD".to_string(),
             }) {
                 return StatusCode::Network.with_context(format!("Disconnect error: {err:?}"));

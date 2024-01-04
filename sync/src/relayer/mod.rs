@@ -218,7 +218,7 @@ impl Relayer {
                 status
             );
             command_sender.must_send(Command::Ban {
-                peer_index: peer,
+                peer,
                 duration: ban_time,
                 reason: status.to_string(),
             });
@@ -330,7 +330,7 @@ impl Relayer {
                 .collect();
             if let Err(err) = command_sender.send(Command::FilterBroadCast {
                 protocol: command_sender.protocol(),
-                target: TargetSession::Multi(Box::new(selected_peers.into_iter())),
+                target: TargetSession::Multi(Box::new(selected_peers.into_iter())).into(),
                 message: message.as_bytes(),
                 quick: true,
             }) {
@@ -382,7 +382,7 @@ impl Relayer {
                 protocol: SupportProtocols::LightClient,
                 target: TargetSession::Filter(Box::new(move |id| {
                     light_client_peers.contains(&id.into())
-                })),
+                })).into(),
                 message: light_client_message.as_bytes(),
                 quick: false,
             }) {

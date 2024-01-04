@@ -581,7 +581,7 @@ impl NetworkController {
         info!("Dialing {}", &multiaddr);
         handle.spawn_task(async move {
             let _ = command_sender
-                .send(libp2p::Command::Dial { multiaddr })
+                .send(libp2p::Command::Dial { multiaddr: multiaddr.into() })
                 .await;
         });
     }
@@ -594,7 +594,7 @@ impl NetworkController {
         info!("Disconnecting {}", &peer);
         handle.spawn_task(async move {
             let _ = command_sender
-                .send(libp2p::Command::Disconnect { peer, message })
+                .send(libp2p::Command::Disconnect { peer: peer.into(), message })
                 .await;
         });
     }
@@ -742,7 +742,7 @@ impl NetworkController {
                 self.must_get_libp2p_controller()
                     .command_sender
                     .try_send(libp2p::Command::Disconnect {
-                        peer: peer_id,
+                        peer: peer_id.into(),
                         message: "".to_string(),
                     })
                     .expect("command receiver not closed");

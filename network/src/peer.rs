@@ -6,6 +6,7 @@ use crate::{
 use ipnetwork::IpNetwork;
 use libp2p::multiaddr::Protocol;
 use libp2p::{Multiaddr as Libp2pMultiaddr, PeerId as Libp2pPeerId};
+use p2p::service::TargetSession;
 use p2p::utils::{extract_peer_id, multiaddr_to_socketaddr};
 use p2p::{secio::PeerId as TentaclePeerId, SessionId};
 use serde::{Deserialize, Serialize};
@@ -414,6 +415,38 @@ impl ConnectionType {
         match self {
             ConnectionType::Inbound => true,
             _ => false,
+        }
+    }
+}
+
+pub enum BroadcastTarget {
+    Tentacle(TargetSession),
+}
+
+impl std::fmt::Debug for BroadcastTarget {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            &BroadcastTarget::Tentacle(t) => match t {
+                TargetSession::All => write!(f, "tentacle target all"),
+                TargetSession::Filter(_) => write!(f, "tentacle target filter"),
+                TargetSession::Multi(_) => write!(f, "tentacle target multi"),
+                TargetSession::Single(s) => write!(f, "tentacle target single ({})", s),
+            },
+        }
+    }
+}
+
+impl From<TargetSession> for BroadcastTarget {
+    fn from(t: TargetSession) -> Self {
+        Self::Tentacle(t)
+    }
+}
+
+impl TryFrom<BroadcastTarget> for TargetSession {
+    type Error = String;
+    fn try_from(t: BroadcastTarget) -> Result<Self, Self::Error> {
+        match t {
+            BroadcastTarget::Tentacle(t) => Ok(t),
         }
     }
 }

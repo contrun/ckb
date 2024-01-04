@@ -119,6 +119,9 @@ pub trait CKBProtocolContext: Send {
     }
     async fn process_command(&self, command: Command) {
         match command {
+            Command::Dial { multiaddr: _ } => {
+                todo!("Implement dial for tentacle");
+            }
             Command::SendMessage {
                 protocol,
                 peer_index,
@@ -130,25 +133,25 @@ pub trait CKBProtocolContext: Send {
                 };
             }
             Command::Ban {
-                peer_index,
+                peer,
                 duration,
                 reason,
-            } => self.ban_peer(peer_index, duration, reason),
+            } => self.ban_peer(peer, duration, reason),
             Command::Disconnect {
-                peer_index,
+                peer,
                 message,
             } => {
-                let result = self.disconnect(peer_index, &message);
+                let result = self.disconnect(peer, &message);
                 if let Err(e) = result {
-                    debug!("Failed to disconnect from peer {}: {:?}", peer_index, e)
+                    debug!("Failed to disconnect from peer {}: {:?}", peer, e)
                 };
             }
-            Command::GetPeer { peer_index, sender } => {
-                let result = sender.send(self.get_peer(peer_index));
+            Command::GetPeer { peer, sender } => {
+                let result = sender.send(self.get_peer(peer));
                 if let Err(e) = result {
                     debug!(
                         "Failed to send response of get_peer (peer: {}): {:?}",
-                        peer_index, e
+                        peer, e
                     );
                 };
             }
@@ -159,9 +162,9 @@ pub trait CKBProtocolContext: Send {
                 };
             }
             Command::Report {
-                peer_index,
+                peer,
                 behaviour,
-            } => self.report_peer(peer_index, behaviour),
+            } => self.report_peer(peer, behaviour),
             Command::FilterBroadCast {
                 // TODO: need to send message to the specific protocol.
                 protocol: _,
@@ -169,6 +172,7 @@ pub trait CKBProtocolContext: Send {
                 message,
                 quick,
             } => {
+                let target = target.try_into().expect("Must be a tentacle broadcast target");
                 let result = if quick {
                     self.quick_filter_broadcast(target, message)
                 } else {

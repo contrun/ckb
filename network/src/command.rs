@@ -1,29 +1,34 @@
 use crate::CKBProtocolContext;
+use crate::peer::BroadcastTarget;
 use crate::{Behaviour, Peer, PeerIndex, SupportProtocols};
 use ckb_logger::debug;
 use p2p::bytes::Bytes;
-use p2p::service::TargetSession;
+use crate::Multiaddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 
+#[derive(Debug)]
 pub enum Command {
+    Dial {
+        multiaddr: Multiaddr,
+    },
     Disconnect {
-        peer_index: PeerIndex,
+        peer: PeerIndex,
         message: String,
     },
     Ban {
-        peer_index: PeerIndex,
+        peer: PeerIndex,
         duration: Duration,
         reason: String,
     },
     Report {
-        peer_index: PeerIndex,
+        peer: PeerIndex,
         behaviour: Behaviour,
     },
     GetPeer {
-        peer_index: PeerIndex,
+        peer: PeerIndex,
         sender: oneshot::Sender<Option<Peer>>,
     },
     GetConnectedPeers {
@@ -36,22 +41,22 @@ pub enum Command {
     },
     FilterBroadCast {
         protocol: SupportProtocols,
-        target: TargetSession,
+        target: BroadcastTarget,
         message: Bytes,
         quick: bool,
     },
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct CommandSenderContext {
-    protocol: SupportProtocols,
-    ckb2023: bool,
+    protocol: Option<SupportProtocols>,
+    ckb2023: Option<bool>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default, Debug)]
 pub struct CommandSender {
     context: CommandSenderContext,
-    channel: mpsc::Sender<Command>,
+    channel: Option<mpsc::Sender<Command>>,
 }
 
 impl CommandSender {
@@ -60,16 +65,30 @@ impl CommandSender {
         (
             Self {
                 context: CommandSenderContext {
-                    protocol: nc.protocol_id().into(),
-                    ckb2023: nc.ckb2023(),
+                    protocol: Some(nc.protocol_id().into()),
+                    ckb2023: Some(nc.ckb2023()),
                 },
-                channel: command_sender,
+                channel: Some(command_sender),
             },
             command_receiver,
         )
     }
+
+    pub fn with_mpsc_sender(mut self, mpsc_sender: mpsc::Sender<Command>) -> Self {
+        self.channel = Some(mpsc_sender);
+        self
+    }
+    pub fn with_ckb2023(mut self, ckb2023: bool) -> Self {
+        self.context.ckb2023 = Some(ckb2023);
+        self
+    }
+    pub fn with_protocol(mut self, protocol: SupportProtocols) -> Self {
+        self.context.protocol = Some(protocol);
+        self
+    }
+
     pub fn send(&self, command: Command) -> Result<(), mpsc::error::SendError<Command>> {
-        self.channel.blocking_send(command)
+        self.channel.as_ref().unwrap().blocking_send(command)
     }
 
     pub fn try_send(&self, command: Command) {
@@ -81,17 +100,17 @@ impl CommandSender {
     }
 
     pub fn protocol(&self) -> SupportProtocols {
-        self.context.protocol
+        self.context.protocol.unwrap()
     }
 
     pub fn ckb2023(&self) -> bool {
-        self.context.ckb2023
+        self.context.ckb2023.unwrap()
     }
 
     pub fn get_peer(&self, peer: PeerIndex) -> Option<Peer> {
         let (sender, receiver) = oneshot::channel();
         match self.send(Command::GetPeer {
-            peer_index: peer,
+            peer,
             sender,
         }) {
             Ok(_) => receiver.blocking_recv().ok().flatten(),

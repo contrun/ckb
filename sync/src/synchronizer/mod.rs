@@ -316,7 +316,7 @@ impl Synchronizer {
                 item_name, peer, ban_time, status
             );
             command_sender.must_send(Command::Ban {
-                peer_index: peer,
+                peer,
                 duration: ban_time,
                 reason: status.to_string(),
             });
@@ -539,7 +539,7 @@ impl Synchronizer {
         for peer in eviction {
             info!("timeout eviction peer={}", peer);
             if let Err(err) = command_sender.send(Command::Disconnect {
-                peer_index: peer,
+                peer,
                 message: "sync timeout eviction".to_string(),
             }) {
                 debug!("synchronizer disconnect error: {:?}", err);
@@ -667,7 +667,7 @@ impl Synchronizer {
                 continue;
             }
             command_sender.must_send(Command::Disconnect {
-                peer_index: *peer,
+                peer: *peer,
                 message: "sync disconnect".to_string(),
             });
         }

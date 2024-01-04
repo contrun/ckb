@@ -17,16 +17,7 @@ pub use serde::{self, Deserialize, Serialize};
 
 use ckb_spawn::Spawn;
 use tokio::{sync::mpsc};
-
-
-
-
-#[derive(Debug, Clone)]
-pub enum Command {
-    Dial { multiaddr: Multiaddr },
-    Disconnect { peer: PeerId, message: String },
-    GetHeader,
-}
+pub use crate::Command;
 
 pub enum Event {}
 

@@ -67,7 +67,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 use ckb_async_runtime::tokio::time;
-use ckb_logger::{debug, warn, info};
+use ckb_logger::{debug, info, warn};
+use ckb_network::CommandSender;
 use ckb_sync::Synchronizer;
 pub use libp2p::request_response::Codec;
 
@@ -349,6 +350,8 @@ where
 {
     /// The synchronizer that keep sync state and drive the sync protocol.
     synchronizer: Synchronizer,
+    /// The command sender to send command to the backend network stack.
+    command_sender: CommandSender,
     /// The supported inbound protocols.
     inbound_protocols: SmallVec<[TCodec::Protocol; 2]>,
     /// The supported outbound protocols.
@@ -382,11 +385,22 @@ where
     TCodec: Codec + Default + Clone + Send + 'static,
 {
     /// Creates a new `Behaviour` for the given protocols and configuration, using [`Default`] to construct the codec.
-    pub fn new<I>(protocols: I, cfg: Config, synchronizer: Synchronizer) -> Self
+    pub fn new<I>(
+        protocols: I,
+        cfg: Config,
+        synchronizer: Synchronizer,
+        command_sender: CommandSender,
+    ) -> Self
     where
         I: IntoIterator<Item = (TCodec::Protocol, ProtocolSupport)>,
     {
-        Self::with_codec(TCodec::default(), protocols, cfg, synchronizer)
+        Self::with_codec(
+            TCodec::default(),
+            protocols,
+            cfg,
+            synchronizer,
+            command_sender,
+        )
     }
 }
 
@@ -401,6 +415,7 @@ where
         protocols: I,
         cfg: Config,
         synchronizer: Synchronizer,
+        command_sender: CommandSender,
     ) -> Self
     where
         I: IntoIterator<Item = (TCodec::Protocol, ProtocolSupport)>,
@@ -418,6 +433,7 @@ where
         let get_headers_timer = time::interval(cfg.get_headers_interval);
         Behaviour {
             synchronizer,
+            command_sender,
             inbound_protocols,
             outbound_protocols,
             next_outbound_request_id: OutboundRequestId(1),
@@ -985,7 +1001,10 @@ where
         }
     }
 
-    fn poll(&mut self, cx: &mut Context<'_>) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
+    fn poll(
+        &mut self,
+        cx: &mut Context<'_>,
+    ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
         if let Some(ev) = self.pending_events.pop_front() {
             return Poll::Ready(ev);
         } else if self.pending_events.capacity() > EMPTY_QUEUE_SHRINK_THRESHOLD {
