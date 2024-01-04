@@ -409,6 +409,14 @@ where
             command_sender,
         )
     }
+
+    pub fn synchronizer(&self) -> &Synchronizer {
+        &self.synchronizer
+    }
+
+    pub fn command_sender(&self) -> &CommandSender {
+        &self.command_sender
+    }
 }
 
 impl<TCodec> Behaviour<TCodec>

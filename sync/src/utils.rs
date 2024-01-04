@@ -52,7 +52,7 @@ pub(crate) fn send_message_with_command_sender<Message: Entity>(
 ) -> Status {
     if let Err(err) = comand_sender.send(Command::SendMessage {
         protocol,
-        peer_index,
+        peer: peer_index,
         message: message.as_bytes(),
     }) {
         let name = message_name(protocol.protocol_id(), message);

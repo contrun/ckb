@@ -24,6 +24,7 @@ use ckb_network::libp2p::{
     swarm::NetworkBehaviour, swarm::SwarmEvent, tcp, yamux, Command, Deserialize,
     NetworkServiceTrait, PeerId, Serialize, StreamProtocol, Swarm, SwarmBuilder,
 };
+use ckb_types::bytes::Bytes;
 use core::time::Duration;
 
 use ckb_network::tokio::{select, sync::mpsc};
@@ -31,7 +32,7 @@ use ckb_network::tokio::{select, sync::mpsc};
 use std::sync::Arc;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(crate = "self::serde")] // must be below the derive attribute
-pub struct SyncRequest(pub String);
+pub struct SyncRequest(pub Bytes);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(crate = "self::serde")] // must be below the derive attribute
@@ -288,15 +289,30 @@ impl NetworkServiceTrait for NetworkService {
                     }
                     let sync = sync.as_mut().unwrap();
 
-                    let _ = sync.send_response(channel, SyncResponse("Got you".to_string()));
+                    // The sync behaviour actually does not need a response. We send a response only to facilitate development.
+                    let _ = sync.send_response(
+                        channel,
+                        SyncResponse(format!("Got message {:x} from {:?}", &request.0, peer)),
+                    );
+                    if let Some(msg) = sync.synchronizer().read_sync_message_or_ban(
+                        &request.0,
+                        peer.into(),
+                        sync.command_sender().clone(),
+                    ) {
+                        sync.synchronizer().process(
+                            sync.command_sender().clone(),
+                            peer.into(),
+                            msg,
+                        );
+                    }
                 }
                 sync::Message::Response {
                     request_id,
                     response,
                 } => {
                     info!(
-                        "Received disconnect message response ({:?}) for request_id {:?}",
-                        response, request_id,
+                        "Received disconnect message response ({}) for request_id {:?}",
+                        response.0, request_id,
                     );
                 }
             },
@@ -362,6 +378,30 @@ impl NetworkServiceTrait for NetworkService {
                     "Disconnect message send to {}, request_id {:?}",
                     peer, request_id
                 );
+            }
+            Command::SendMessage {
+                protocol,
+                peer,
+                message,
+            } => {
+                if protocol == SupportProtocols::Sync {
+                    let sync = match self.swarm.behaviour_mut().sync.as_mut() {
+                        Some(sync) => sync,
+                        None => return,
+                    };
+                    let peer: PeerId = match peer {
+                        PeerIndex::Libp2p(peer_id) => peer_id,
+                        PeerIndex::Tentacle(peer_id) => {
+                            error!(
+                                "Trying to disconnect tentacle peer {} while libp2p peer is expected",
+                                peer_id
+                            );
+                            return;
+                        }
+                    };
+                    info!("Sending sync message {:?} to {:}", &message, &peer);
+                    sync.send_request(&peer, SyncRequest(message));
+                }
             }
             _ => {
                 todo!("handle command {:?}", command);

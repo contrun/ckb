@@ -124,12 +124,12 @@ pub trait CKBProtocolContext: Send {
             }
             Command::SendMessage {
                 protocol,
-                peer_index,
+                peer,
                 message,
             } => {
-                let result = self.send_message(protocol.protocol_id(), peer_index, message);
+                let result = self.send_message(protocol.protocol_id(), peer, message);
                 if let Err(e) = result {
-                    debug!("Failed to send message to peer {}: {:?}", peer_index, e);
+                    debug!("Failed to send message to peer {}: {:?}", peer, e);
                 };
             }
             Command::Ban {

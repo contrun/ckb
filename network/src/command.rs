@@ -36,7 +36,7 @@ pub enum Command {
     },
     SendMessage {
         protocol: SupportProtocols,
-        peer_index: PeerIndex,
+        peer: PeerIndex,
         message: Bytes,
     },
     FilterBroadCast {

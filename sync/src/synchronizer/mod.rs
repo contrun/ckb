@@ -292,7 +292,7 @@ impl Synchronizer {
         }
     }
 
-    fn process(
+    pub fn process(
         &self,
         command_sender: CommandSender,
         peer: PeerIndex,
