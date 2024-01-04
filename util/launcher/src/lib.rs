@@ -28,6 +28,7 @@ use ckb_rpc::{RpcServer, ServiceBuilder};
 use ckb_shared::Shared;
 
 use ckb_shared::shared_builder::{SharedBuilder, SharedPackage};
+use ckb_stop_handler::new_tokio_exit_rx;
 use ckb_store::{ChainDB, ChainStore};
 use ckb_sync::{BlockFilter, NetTimeProtocol, Relayer, SyncShared, Synchronizer};
 use ckb_tx_pool::service::TxVerificationResult;
@@ -307,6 +308,7 @@ impl Launcher {
             Arc::clone(&network_state),
             &support_protocols,
             &required_protocols,
+            new_tokio_exit_rx(),
             synchronizer.clone(),
             CommandSender::default()
                 .with_mpsc_sender(command_sender.clone())

@@ -69,6 +69,7 @@
 use ckb_async_runtime::tokio::time;
 use ckb_logger::{debug, info, warn};
 use ckb_network::CommandSender;
+use ckb_stop_handler::CancellationToken;
 use ckb_sync::Synchronizer;
 pub use libp2p::request_response::Codec;
 
@@ -348,6 +349,10 @@ pub struct Behaviour<TCodec>
 where
     TCodec: Codec + Clone + Send + 'static,
 {
+    /// Indicator of whether this behaviour should no longer continue.
+    is_finished: bool,
+    /// Stop all activities when this channel fires.
+    stop_rx: CancellationToken,
     /// The synchronizer that keep sync state and drive the sync protocol.
     synchronizer: Synchronizer,
     /// The command sender to send command to the backend network stack.
@@ -365,7 +370,7 @@ where
     /// The protocol codec for reading and writing requests and responses.
     codec: TCodec,
     /// The timer to trigger GetHeader requests.
-    get_headers_timer: time::Interval,
+    get_headers_timer: Option<time::Interval>,
     /// Pending events to return from `poll`.
     pending_events: VecDeque<
         ToSwarm<BehaviourEvent<TCodec::Request, TCodec::Response>, OutboundMessage<TCodec>>,
@@ -388,6 +393,7 @@ where
     pub fn new<I>(
         protocols: I,
         cfg: Config,
+        stop_rx: CancellationToken,
         synchronizer: Synchronizer,
         command_sender: CommandSender,
     ) -> Self
@@ -398,6 +404,7 @@ where
             TCodec::default(),
             protocols,
             cfg,
+            stop_rx,
             synchronizer,
             command_sender,
         )
@@ -414,6 +421,7 @@ where
         codec: TCodec,
         protocols: I,
         cfg: Config,
+        stop_rx: CancellationToken,
         synchronizer: Synchronizer,
         command_sender: CommandSender,
     ) -> Self
@@ -430,8 +438,9 @@ where
                 outbound_protocols.push(p.clone());
             }
         }
-        let get_headers_timer = time::interval(cfg.get_headers_interval);
         Behaviour {
+            is_finished: false,
+            stop_rx,
             synchronizer,
             command_sender,
             inbound_protocols,
@@ -440,12 +449,16 @@ where
             next_inbound_request_id: Arc::new(AtomicU64::new(1)),
             config: cfg,
             codec,
-            get_headers_timer,
+            get_headers_timer: None,
             pending_events: VecDeque::new(),
             connected: HashMap::new(),
             pending_outbound_requests: HashMap::new(),
             addresses: HashMap::new(),
         }
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.stop_rx.is_cancelled()
     }
 
     /// Initiates sending a request.
@@ -1005,27 +1018,33 @@ where
         &mut self,
         cx: &mut Context<'_>,
     ) -> Poll<ToSwarm<Self::ToSwarm, THandlerInEvent<Self>>> {
-        if let Some(ev) = self.pending_events.pop_front() {
+        if self.is_finished {
+            return Poll::Pending;
+        }
+        if let Some(_) = self.stop_rx.cancelled().now_or_never() {
+            self.is_finished = true;
+            drop(self.get_headers_timer.as_mut());
+            self.get_headers_timer = None;
+        } else if let Some(ev) = self.pending_events.pop_front() {
             return Poll::Ready(ev);
         } else if self.pending_events.capacity() > EMPTY_QUEUE_SHRINK_THRESHOLD {
             self.pending_events.shrink_to_fit();
-        } else if let Poll::Ready(_v) = self.get_headers_timer.poll_tick(cx) {
-            info!("GetHeader timer fired");
-            // Maybe spawn a subtask to GetHeader here.
+        } else {
+            match self.get_headers_timer.as_mut() {
+                None => {
+                    info!("Start GetHeader timer");
+                    let interval = time::interval(self.config.get_headers_interval);
+                    self.get_headers_timer = Some(interval);
+                }
+                Some(timer) => {
+                    if let Poll::Ready(_v) = timer.poll_tick(cx) {
+                        info!("GetHeader timer fired");
+                        // Maybe spawn a subtask to GetHeader here.
+                        timer.reset();
+                    }
+                }
+            }
         }
-        // let rx = new_tokio_exit_rx();
-        // loop {
-        //     select! {
-        //         _ = interval.tick() => {
-        //             command_sender.send(Command::GetHeader).await.expect("receiver not dropped");
-        //         },
-        //         _ = rx.cancelled() => {
-        //             info!("Exit signal received, exit now");
-        //             break
-        //         },
-        //     }
-        // }
-
         Poll::Pending
     }
 }

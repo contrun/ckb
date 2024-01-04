@@ -12,6 +12,7 @@ use ckb_network::SupportProtocols;
 use ckb_async_runtime::Handle;
 use ckb_logger::{debug, error, info, trace};
 use ckb_network::async_trait;
+use ckb_stop_handler::CancellationToken;
 use ckb_sync::Synchronizer;
 
 use ::libp2p::request_response::{
@@ -63,6 +64,7 @@ pub fn new_swarm(
     network_state: Arc<NetworkState>,
     supported_protocols: &[SupportProtocols],
     _required_protocol_ids: &[SupportProtocols],
+    stop_rx: CancellationToken,
     synchronizer: Synchronizer,
     command_sender: CommandSender,
 ) -> Swarm<MyBehaviour> {
@@ -114,6 +116,7 @@ pub fn new_swarm(
                 sync::ProtocolSupport::Full,
             )],
             sync::Config::default(),
+            stop_rx,
             synchronizer,
             command_sender,
         ))
