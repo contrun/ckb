@@ -734,6 +734,70 @@ impl Synchronizer {
         debug!("send_getblocks len={:?} to peer={}", v_fetch.len(), peer);
         let _status = send_protocol_message_with_command_sender(command_sender, peer, &message);
     }
+
+    pub fn read_sync_message_or_ban<'r>(
+        &self,
+        data: &'r [u8],
+        peer: PeerIndex,
+        command_sender: CommandSender,
+    ) -> Option<packed::SyncMessageUnionReader<'r>> {
+        let msg = match packed::SyncMessageReader::from_compatible_slice(&data) {
+            Ok(msg) => {
+                let item = msg.to_enum();
+                if let packed::SyncMessageUnionReader::SendBlock(ref reader) = item {
+                    if reader.has_extra_fields() || reader.block().count_extra_fields() > 1 {
+                        info!(
+                            "Peer {} sends us a malformed message: \
+                             too many fields in SendBlock",
+                            peer
+                        );
+                        let _ = command_sender.send(Command::Ban {
+                            peer,
+                            duration: BAD_MESSAGE_BAN_TIME,
+                            reason: String::from(
+                                "send us a malformed message: \
+                                 too many fields in SendBlock",
+                            ),
+                        });
+                        return None;
+                    } else {
+                        item
+                    }
+                } else {
+                    match packed::SyncMessageReader::from_slice(&data) {
+                        Ok(msg) => msg.to_enum(),
+                        _ => {
+                            info!(
+                                "Peer {} sends us a malformed message: \
+                                 too many fields",
+                                peer
+                            );
+                            let _ = command_sender.send(Command::Ban {
+                                peer,
+                                duration: BAD_MESSAGE_BAN_TIME,
+                                reason: String::from(
+                                    "send us a malformed message: \
+                                     too many fields",
+                                ),
+                            });
+                            return None;
+                        }
+                    }
+                }
+            }
+            _ => {
+                info!("Peer {} sends us a malformed message", peer);
+                let _ = command_sender.send(Command::Ban {
+                    peer,
+                    duration: BAD_MESSAGE_BAN_TIME,
+                    reason: String::from("send us a malformed message"),
+                });
+                return None;
+            }
+        };
+
+        Some(msg)
+    }
 }
 
 #[async_trait]
@@ -763,63 +827,13 @@ impl CKBProtocolHandler for Synchronizer {
         session_id: TentacleSessionId,
         data: Bytes,
     ) {
-        let peer_index = session_id.into();
-        let msg = match packed::SyncMessageReader::from_compatible_slice(&data) {
-            Ok(msg) => {
-                let item = msg.to_enum();
-                if let packed::SyncMessageUnionReader::SendBlock(ref reader) = item {
-                    if reader.has_extra_fields() || reader.block().count_extra_fields() > 1 {
-                        info!(
-                            "Peer {} sends us a malformed message: \
-                             too many fields in SendBlock",
-                            peer_index
-                        );
-                        nc.ban_peer(
-                            peer_index,
-                            BAD_MESSAGE_BAN_TIME,
-                            String::from(
-                                "send us a malformed message: \
-                                 too many fields in SendBlock",
-                            ),
-                        );
-                        return;
-                    } else {
-                        item
-                    }
-                } else {
-                    match packed::SyncMessageReader::from_slice(&data) {
-                        Ok(msg) => msg.to_enum(),
-                        _ => {
-                            info!(
-                                "Peer {} sends us a malformed message: \
-                                 too many fields",
-                                peer_index
-                            );
-                            nc.ban_peer(
-                                peer_index,
-                                BAD_MESSAGE_BAN_TIME,
-                                String::from(
-                                    "send us a malformed message: \
-                                     too many fields",
-                                ),
-                            );
-                            return;
-                        }
-                    }
-                }
-            }
-            _ => {
-                info!("Peer {} sends us a malformed message", peer_index);
-                nc.ban_peer(
-                    peer_index,
-                    BAD_MESSAGE_BAN_TIME,
-                    String::from("send us a malformed message"),
-                );
-                return;
-            }
+        let peer = session_id.into();
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
+        let msg = match self.read_sync_message_or_ban(&data, peer, command_sender.clone()) {
+            Some(msg) => msg,
+            None => return,
         };
-
-        debug!("received msg {} from {}", msg.item_name(), peer_index);
+        debug!("received msg {} from {}", msg.item_name(), peer);
         #[cfg(feature = "with_sentry")]
         {
             let sentry_hub = sentry::Hub::current();
@@ -831,15 +845,14 @@ impl CKBProtocolHandler for Synchronizer {
         }
 
         let start_time = Instant::now();
-        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
         tokio::task::block_in_place(move || {
-            tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
+            tokio::task::block_in_place(move || self.process(command_sender, peer, msg));
         });
         let _ = nc.process_command_stream(command_receiver).await;
         debug!(
             "process message={}, peer={}, cost={:?}",
             msg.item_name(),
-            peer_index,
+            peer,
             Instant::now().saturating_duration_since(start_time),
         );
     }
