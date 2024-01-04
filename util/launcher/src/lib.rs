@@ -312,6 +312,7 @@ impl Launcher {
             synchronizer.clone(),
             CommandSender::default()
                 .with_mpsc_sender(command_sender.clone())
+                .with_handle(shared.async_handle().clone())
         );
         let libp2p_network_controller = Libp2pNetworkController::new::<NetworkService>(
             shared.async_handle(),

@@ -50,17 +50,11 @@ pub(crate) fn send_message_with_command_sender<Message: Entity>(
     peer_index: PeerIndex,
     message: &Message,
 ) -> Status {
-    if let Err(err) = comand_sender.send(Command::SendMessage {
+    comand_sender.send(Command::SendMessage {
         protocol,
         peer: peer_index,
         message: message.as_bytes(),
-    }) {
-        let name = message_name(protocol.protocol_id(), message);
-        let error_message = format!("send_message_to_channel {name}, error: {err:?}");
-        ckb_logger::error!("{}", error_message);
-        return StatusCode::Network.with_context(error_message);
-    }
-
+    });
     let bytes = message.as_bytes().len() as u64;
     let item_name = item_name(protocol.protocol_id(), message);
     let protocol_name = protocol.name();

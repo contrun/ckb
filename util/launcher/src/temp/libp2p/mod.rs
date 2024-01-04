@@ -117,6 +117,7 @@ pub fn new_swarm(
                 sync::ProtocolSupport::Full,
             )],
             sync::Config::default(),
+            handle,
             stop_rx,
             synchronizer,
             command_sender,

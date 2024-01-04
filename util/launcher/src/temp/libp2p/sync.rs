@@ -66,7 +66,7 @@
 
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-use ckb_async_runtime::tokio::time;
+use ckb_async_runtime::{tokio::time, Handle};
 use ckb_logger::{debug, info, warn};
 use ckb_network::CommandSender;
 use ckb_stop_handler::CancellationToken;
@@ -353,6 +353,8 @@ where
     is_finished: bool,
     /// Stop all activities when this channel fires.
     stop_rx: CancellationToken,
+    /// The executor handle which is used to spawn async tasks.
+    handle: Handle,
     /// The synchronizer that keep sync state and drive the sync protocol.
     synchronizer: Synchronizer,
     /// The command sender to send command to the backend network stack.
@@ -393,6 +395,7 @@ where
     pub fn new<I>(
         protocols: I,
         cfg: Config,
+        handle: Handle,
         stop_rx: CancellationToken,
         synchronizer: Synchronizer,
         command_sender: CommandSender,
@@ -404,6 +407,7 @@ where
             TCodec::default(),
             protocols,
             cfg,
+            handle,
             stop_rx,
             synchronizer,
             command_sender,
@@ -429,6 +433,7 @@ where
         codec: TCodec,
         protocols: I,
         cfg: Config,
+        handle: Handle,
         stop_rx: CancellationToken,
         synchronizer: Synchronizer,
         command_sender: CommandSender,
@@ -449,6 +454,7 @@ where
         Behaviour {
             is_finished: false,
             stop_rx,
+            handle,
             synchronizer,
             command_sender,
             inbound_protocols,
@@ -796,6 +802,11 @@ where
         _: &Multiaddr,
         _: &Multiaddr,
     ) -> Result<THandler<Self>, ConnectionDenied> {
+        dbg!("inbound connection established");
+        self.synchronizer
+            .peers()
+            .sync_connected(peer.into(), false, false, false);
+
         let mut handler = Handler::new(
             self.inbound_protocols.clone(),
             self.codec.clone(),
@@ -816,10 +827,15 @@ where
         _addresses: &[Multiaddr],
         _effective_role: Endpoint,
     ) -> Result<Vec<Multiaddr>, ConnectionDenied> {
+        dbg!("outbound connection established", &maybe_peer, _connection_id);
         let peer = match maybe_peer {
             None => return Ok(vec![]),
             Some(peer) => peer,
         };
+
+        self.synchronizer
+            .peers()
+            .sync_connected(peer.into(), true, false, false);
 
         let mut addresses = Vec::new();
         if let Some(connections) = self.connected.get(&peer) {
@@ -1048,6 +1064,9 @@ where
                     if let Poll::Ready(_v) = timer.poll_tick(cx) {
                         info!("GetHeader timer fired");
                         // Maybe spawn a subtask to GetHeader here.
+                        let synchronizer = self.synchronizer.clone();
+                        let command_sender = self.command_sender.clone();
+                        synchronizer.start_sync_headers(command_sender);
                         timer.reset();
                     }
                 }

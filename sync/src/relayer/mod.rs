@@ -217,7 +217,7 @@ impl Relayer {
                 ban_time,
                 status
             );
-            command_sender.must_send(Command::Ban {
+            command_sender.send(Command::Ban {
                 peer,
                 duration: ban_time,
                 reason: status.to_string(),
@@ -328,19 +328,12 @@ impl Relayer {
                 })
                 .take(MAX_RELAY_PEERS)
                 .collect();
-            if let Err(err) = command_sender.send(Command::FilterBroadCast {
+            command_sender.send(Command::FilterBroadCast {
                 protocol: command_sender.protocol(),
                 target: TargetSession::Multi(Box::new(selected_peers.into_iter())).into(),
                 message: message.as_bytes(),
                 quick: true,
-            }) {
-                debug_target!(
-                    crate::LOG_TARGET_RELAY,
-                    "relayer send block when accept block error: {:?}",
-                    err,
-                );
-            }
-
+            });
             let snapshot = self.shared.shared().snapshot();
             let parent_chain_root = {
                 let mmr = snapshot.chain_root_mmr(boxed.header().number() - 1);
@@ -378,20 +371,15 @@ impl Relayer {
                 .filter(|(_id, peer)| peer.if_lightclient_subscribed)
                 .map(|(id, _)| id)
                 .collect();
-            if let Err(err) = command_sender.send(Command::FilterBroadCast {
+            command_sender.send(Command::FilterBroadCast {
                 protocol: SupportProtocols::LightClient,
                 target: TargetSession::Filter(Box::new(move |id| {
                     light_client_peers.contains(&id.into())
-                })).into(),
+                }))
+                .into(),
                 message: light_client_message.as_bytes(),
                 quick: false,
-            }) {
-                debug_target!(
-                    crate::LOG_TARGET_RELAY,
-                    "relayer send last state to light client when accept block, error: {:?}",
-                    err,
-                );
-            }
+            });
         }
     }
 

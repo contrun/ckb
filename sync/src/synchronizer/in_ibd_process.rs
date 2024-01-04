@@ -1,5 +1,5 @@
 use crate::synchronizer::Synchronizer;
-use crate::{Status, StatusCode};
+use crate::Status;
 use ckb_logger::info;
 use ckb_network::{Command, CommandSender, PeerIndex};
 
@@ -34,11 +34,11 @@ impl<'a> InIBDProcess<'a> {
             if state.peer_flags.is_outbound {
                 if state.peer_flags.is_whitelist {
                     self.synchronizer.shared().state().suspend_sync(state);
-                } else if let Err(err) = self.command_sender.send(Command::Disconnect {
-                    peer: self.peer,
-                    message: "outbound in ibd".to_string(),
-                }) {
-                    return StatusCode::Network.with_context(format!("Disconnect error: {err:?}"));
+                } else {
+                    self.command_sender.send(Command::Disconnect {
+                        peer: self.peer,
+                        message: "outbound in ibd".to_string(),
+                    })
                 }
             } else {
                 self.synchronizer.shared().state().suspend_sync(state);

@@ -315,7 +315,7 @@ impl Synchronizer {
                 "receive {} from {}, ban {:?} for {}",
                 item_name, peer, ban_time, status
             );
-            command_sender.must_send(Command::Ban {
+            command_sender.send(Command::Ban {
                 peer,
                 duration: ban_time,
                 reason: status.to_string(),
@@ -538,16 +538,14 @@ impl Synchronizer {
         }
         for peer in eviction {
             info!("timeout eviction peer={}", peer);
-            if let Err(err) = command_sender.send(Command::Disconnect {
+            command_sender.send(Command::Disconnect {
                 peer,
                 message: "sync timeout eviction".to_string(),
-            }) {
-                debug!("synchronizer disconnect error: {:?}", err);
-            }
+            });
         }
     }
 
-    fn start_sync_headers(&self, command_sender: CommandSender) {
+    pub fn start_sync_headers(&self, command_sender: CommandSender) {
         let now = unix_time_as_millis();
         let active_chain = self.shared.active_chain();
         let ibd = active_chain.is_initial_block_download();
@@ -559,6 +557,7 @@ impl Synchronizer {
             .map(|kv_pair| *kv_pair.key())
             .collect();
 
+        dbg!(&peers);
         if peers.is_empty() {
             return;
         }
@@ -666,7 +665,7 @@ impl Synchronizer {
             {
                 continue;
             }
-            command_sender.must_send(Command::Disconnect {
+            command_sender.send(Command::Disconnect {
                 peer: *peer,
                 message: "sync disconnect".to_string(),
             });
@@ -751,7 +750,7 @@ impl Synchronizer {
                              too many fields in SendBlock",
                             peer
                         );
-                        let _ = command_sender.send(Command::Ban {
+                        command_sender.send(Command::Ban {
                             peer,
                             duration: BAD_MESSAGE_BAN_TIME,
                             reason: String::from(
@@ -772,7 +771,7 @@ impl Synchronizer {
                                  too many fields",
                                 peer
                             );
-                            let _ = command_sender.send(Command::Ban {
+                            command_sender.send(Command::Ban {
                                 peer,
                                 duration: BAD_MESSAGE_BAN_TIME,
                                 reason: String::from(
@@ -787,7 +786,7 @@ impl Synchronizer {
             }
             _ => {
                 info!("Peer {} sends us a malformed message", peer);
-                let _ = command_sender.send(Command::Ban {
+                command_sender.send(Command::Ban {
                     peer,
                     duration: BAD_MESSAGE_BAN_TIME,
                     reason: String::from("send us a malformed message"),

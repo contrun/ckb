@@ -860,6 +860,7 @@ impl Peers {
         is_whitelist: bool,
         is_2023edition: bool,
     ) {
+        dbg!(&peer, is_outbound, is_whitelist, is_2023edition);
         let protect_outbound = is_outbound
             && self
                 .n_protected_outbound_peers

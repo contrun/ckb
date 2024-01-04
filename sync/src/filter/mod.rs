@@ -90,7 +90,7 @@ impl BlockFilter {
                 ban_time,
                 status
             );
-            command_sender.must_send(Command::Ban {
+            command_sender.send(Command::Ban {
                 peer,
                 duration: ban_time,
                 reason: status.to_string(),

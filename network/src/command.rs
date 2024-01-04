@@ -1,9 +1,10 @@
-use crate::CKBProtocolContext;
 use crate::peer::BroadcastTarget;
+use crate::CKBProtocolContext;
+use crate::Multiaddr;
 use crate::{Behaviour, Peer, PeerIndex, SupportProtocols};
+use ckb_async_runtime::Handle;
 use ckb_logger::debug;
 use p2p::bytes::Bytes;
-use crate::Multiaddr;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -47,10 +48,11 @@ pub enum Command {
     },
 }
 
-#[derive(Clone, Copy, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct CommandSenderContext {
     protocol: Option<SupportProtocols>,
     ckb2023: Option<bool>,
+    handle: Option<Handle>,
 }
 
 #[derive(Clone, Default, Debug)]
@@ -67,6 +69,7 @@ impl CommandSender {
                 context: CommandSenderContext {
                     protocol: Some(nc.protocol_id().into()),
                     ckb2023: Some(nc.ckb2023()),
+                    handle: None,
                 },
                 channel: Some(command_sender),
             },
@@ -86,17 +89,34 @@ impl CommandSender {
         self.context.protocol = Some(protocol);
         self
     }
+    pub fn with_handle(mut self, handle: Handle) -> Self {
+        self.context.handle = Some(handle);
+        self
+    }
 
-    pub fn send(&self, command: Command) -> Result<(), mpsc::error::SendError<Command>> {
+    pub fn send(&self, command: Command) {
+        let sender = self.channel.as_ref().unwrap();
+        match self.context.handle.as_ref() {
+            Some(handle) => {
+                let sender = sender.clone();
+                handle.spawn(async move {
+                    let result = sender.send(command).await;
+                    if let Err(err) = result {
+                        debug!("Failed to send command: {:?}", err);
+                    };
+                });
+            }
+            None => {
+                let result = sender.blocking_send(command);
+                if let Err(err) = result {
+                    debug!("Failed to send command: {:?}", err);
+                };
+        }
+        };
+    }
+
+    pub fn blocking_send(&self, command: Command) -> Result<(), mpsc::error::SendError<Command>> {
         self.channel.as_ref().unwrap().blocking_send(command)
-    }
-
-    pub fn try_send(&self, command: Command) {
-        let _ = self.send(command);
-    }
-
-    pub fn must_send(&self, command: Command) {
-        self.send(command).expect("Receiver alive");
     }
 
     pub fn protocol(&self) -> SupportProtocols {
@@ -109,26 +129,13 @@ impl CommandSender {
 
     pub fn get_peer(&self, peer: PeerIndex) -> Option<Peer> {
         let (sender, receiver) = oneshot::channel();
-        match self.send(Command::GetPeer {
-            peer,
-            sender,
-        }) {
-            Ok(_) => receiver.blocking_recv().ok().flatten(),
-            Err(e) => {
-                debug!("Failed to get peer {:?}: {:?}", peer, e);
-                None
-            }
-        }
+        self.send(Command::GetPeer { peer, sender });
+        receiver.blocking_recv().ok().flatten()
     }
 
     pub fn get_connected_peers(&self) -> Vec<PeerIndex> {
         let (sender, receiver) = oneshot::channel();
-        match self.send(Command::GetConnectedPeers { sender }) {
-            Ok(_) => receiver.blocking_recv().ok().unwrap_or_default(),
-            Err(e) => {
-                debug!("Failed to get connected peers: {:?}", e);
-                vec![]
-            }
-        }
+        self.send(Command::GetConnectedPeers { sender });
+        receiver.blocking_recv().ok().unwrap_or_default()
     }
 }

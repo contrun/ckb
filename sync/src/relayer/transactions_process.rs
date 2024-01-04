@@ -70,7 +70,7 @@ impl<'a> TransactionsProcess<'a> {
             .iter()
             .any(|(_, declared_cycles)| declared_cycles > &max_block_cycles)
         {
-            self.command_sender.must_send(Command::Ban {
+            self.command_sender.send(Command::Ban {
                 peer: self.peer,
                 duration: DEFAULT_BAN_TIME,
                 reason: String::from("relay declared cycles greater than max_block_cycles"),
