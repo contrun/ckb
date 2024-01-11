@@ -4,7 +4,6 @@ use crate::tests::util::{
     MockStore,
 };
 use crate::ChainController;
-use crate::VerifiedBlockStatus;
 use ckb_chain_spec::consensus::{Consensus, ConsensusBuilder};
 use ckb_dao_utils::genesis_dao_data;
 use ckb_error::assert_error_eq;
