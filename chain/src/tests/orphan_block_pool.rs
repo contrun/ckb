@@ -26,10 +26,6 @@ fn gen_lonely_block(parent_header: &HeaderView) -> LonelyBlock {
     }
 }
 
-fn gen_lonely_block_with_callback(parent_header: &HeaderView) -> LonelyBlockWithCallback {
-    gen_lonely_block(parent_header).without_callback()
-}
-
 #[test]
 fn test_remove_blocks_by_parent() {
     let consensus = ConsensusBuilder::default().build();

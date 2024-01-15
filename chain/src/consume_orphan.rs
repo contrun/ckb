@@ -223,6 +223,7 @@ impl ConsumeOrphan {
                 recv(self.lonely_blocks_rx) -> msg => match msg {
                     Ok(lonely_block) => {
                         let lonely_block_epoch: EpochNumberWithFraction = lonely_block.block().epoch();
+                        // Why should we process lonely block first?
 
                         self.process_lonely_block(lonely_block);
 

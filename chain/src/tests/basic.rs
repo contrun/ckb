@@ -45,9 +45,9 @@ fn repeat_process_block() {
         Some(true)
     );
 
-    assert!(!chain_controller
-        .blocking_process_block(Arc::clone(&block))
-        .expect("process block ok"));
+    let result = chain_controller.blocking_process_block(Arc::clone(&block));
+    dbg!(&result);
+    assert!(!result.expect("process block ok"));
     assert_eq!(
         shared
             .store()
