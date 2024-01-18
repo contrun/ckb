@@ -2,9 +2,12 @@
 //!
 //! ckb launcher is helps to launch ckb node.
 
+pub mod temp;
+
 use ckb_app_config::{
     BlockAssemblerConfig, ExitCode, RpcConfig, RpcModule, RunArgs, SupportProtocol,
 };
+use ckb_async_runtime::tokio::sync::mpsc;
 use ckb_async_runtime::Handle;
 use ckb_block_filter::filter::BlockFilter as BlockFilterService;
 use ckb_build_info::Version;
@@ -13,9 +16,10 @@ use ckb_channel::Receiver;
 use ckb_jsonrpc_types::ScriptHashType;
 use ckb_light_client_protocol_server::LightClientProtocol;
 use ckb_logger::info;
+use ckb_network::CommandSender;
 use ckb_network::{
-    observe_listen_port_occupancy, CKBProtocol, Flags, NetworkController, NetworkService,
-    NetworkState, SupportProtocols,
+    libp2p::NetworkController as Libp2pNetworkController, observe_listen_port_occupancy,
+    CKBProtocol, Flags, NetworkController, NetworkState, SupportProtocols, TentacleNetworkService,
 };
 use ckb_network_alert::alert_relayer::AlertRelayer;
 use ckb_proposal_table::ProposalTable;
@@ -24,6 +28,7 @@ use ckb_rpc::{RpcServer, ServiceBuilder};
 use ckb_shared::Shared;
 
 use ckb_shared::shared_builder::{SharedBuilder, SharedPackage};
+use ckb_stop_handler::new_tokio_exit_rx;
 use ckb_store::{ChainDB, ChainStore};
 use ckb_sync::{BlockFilter, NetTimeProtocol, Relayer, SyncShared, Synchronizer};
 use ckb_tx_pool::service::TxVerificationResult;
@@ -31,6 +36,7 @@ use ckb_types::prelude::*;
 use ckb_verification::GenesisVerifier;
 use ckb_verification_traits::Verifier;
 use std::sync::Arc;
+use temp::libp2p::{new_swarm, NetworkService};
 
 const SECP256K1_BLAKE160_SIGHASH_ALL_ARG_LEN: usize = 20;
 
@@ -266,6 +272,9 @@ impl Launcher {
             self.args.config.tmp_dir.as_ref(),
             relay_tx_receiver,
         ));
+        // Sync is a core protocol, user cannot disable it via config
+        let synchronizer = Synchronizer::new(chain_controller.clone(), Arc::clone(&sync_shared));
+
         let fork_enable = {
             let epoch = shared.snapshot().tip_header().epoch().number();
             shared
@@ -280,99 +289,136 @@ impl Launcher {
                 .expect("Init network state failed"),
         );
 
-        // Sync is a core protocol, user cannot disable it via config
-        let synchronizer = Synchronizer::new(chain_controller.clone(), Arc::clone(&sync_shared));
-        let mut protocols = vec![CKBProtocol::new_with_support_protocol(
-            SupportProtocols::Sync,
-            Box::new(synchronizer),
+        let support_protocols: Vec<SupportProtocols> = self
+            .args
+            .config
+            .network
+            .support_protocols
+            .iter()
+            .map(|p| p.into())
+            .collect();
+
+        let required_protocols = vec![SupportProtocols::Sync];
+
+        let (command_sender, command_receiver) = mpsc::channel(100);
+        let swarm = new_swarm(
+            shared.async_handle().clone(),
+            shared.consensus().identify_name(),
+            self.version.to_string(),
             Arc::clone(&network_state),
-        )];
-
-        let support_protocols = &self.args.config.network.support_protocols;
-        let mut flags = Flags::all();
-
-        if support_protocols.contains(&SupportProtocol::Relay) {
-            let relayer = Relayer::new(chain_controller.clone(), Arc::clone(&sync_shared));
-
-            protocols.push(CKBProtocol::new_with_support_protocol(
-                SupportProtocols::RelayV3,
-                Box::new(relayer.clone().v3()),
-                Arc::clone(&network_state),
-            ));
-            if !fork_enable {
-                protocols.push(CKBProtocol::new_with_support_protocol(
-                    SupportProtocols::RelayV2,
-                    Box::new(relayer),
-                    Arc::clone(&network_state),
-                ))
-            }
-        } else {
-            flags.remove(Flags::RELAY);
-        }
-
-        if support_protocols.contains(&SupportProtocol::Filter) {
-            let filter = BlockFilter::new(Arc::clone(&sync_shared));
-
-            protocols.push(CKBProtocol::new_with_support_protocol(
-                SupportProtocols::Filter,
-                Box::new(filter),
-                Arc::clone(&network_state),
-            ));
-        } else {
-            flags.remove(Flags::BLOCK_FILTER);
-        }
-
-        if support_protocols.contains(&SupportProtocol::Time) {
-            let net_timer = NetTimeProtocol::default();
-            protocols.push(CKBProtocol::new_with_support_protocol(
-                SupportProtocols::Time,
-                Box::new(net_timer),
-                Arc::clone(&network_state),
-            ));
-        }
-
-        if support_protocols.contains(&SupportProtocol::LightClient) {
-            let light_client = LightClientProtocol::new(shared.clone());
-            protocols.push(CKBProtocol::new_with_support_protocol(
-                SupportProtocols::LightClient,
-                Box::new(light_client),
-                Arc::clone(&network_state),
-            ));
-        } else {
-            flags.remove(Flags::LIGHT_CLIENT);
-        }
-
-        let alert_signature_config = self.args.config.alert_signature.clone().unwrap_or_default();
-        let alert_relayer = AlertRelayer::new(
-            self.version.short(),
-            shared.notify_controller().clone(),
-            alert_signature_config,
+            &support_protocols,
+            &required_protocols,
+            new_tokio_exit_rx(),
+            synchronizer.clone(),
+            CommandSender::default()
+                .with_mpsc_sender(command_sender.clone())
+                .with_handle(shared.async_handle().clone())
         );
-
-        let alert_notifier = Arc::clone(alert_relayer.notifier());
-        let alert_verifier = Arc::clone(alert_relayer.verifier());
-        if support_protocols.contains(&SupportProtocol::Alert) {
-            protocols.push(CKBProtocol::new_with_support_protocol(
-                SupportProtocols::Alert,
-                Box::new(alert_relayer),
-                Arc::clone(&network_state),
-            ));
-        }
-
-        let required_protocol_ids = vec![SupportProtocols::Sync.protocol_id()];
-
-        let network_controller = NetworkService::new(
+        let libp2p_network_controller = Libp2pNetworkController::new::<NetworkService>(
+            shared.async_handle(),
             Arc::clone(&network_state),
-            protocols,
-            required_protocol_ids,
-            (
-                shared.consensus().identify_name(),
-                self.version.to_string(),
-                flags,
-            ),
+            swarm,
+            command_sender,
+            command_receiver,
         )
-        .start(shared.async_handle())
-        .expect("Start network service failed");
+        .expect("Start libp2p service failed");
+
+        // TODO: make alert_notifier, alert_verifier independent of tentacle.
+        let (tentacle_network_controller, alert_notifier, alert_verifier) = {
+            let mut protocols = vec![CKBProtocol::new_with_support_protocol(
+                SupportProtocols::Sync,
+                Box::new(synchronizer.clone()),
+                Arc::clone(&network_state),
+            )];
+
+            let flags = Flags::from_support_protocols(&support_protocols);
+
+            if support_protocols.contains(&SupportProtocols::RelayV2)
+                || support_protocols.contains(&SupportProtocols::RelayV3)
+            {
+                let relayer = Relayer::new(chain_controller.clone(), Arc::clone(&sync_shared));
+
+                protocols.push(CKBProtocol::new_with_support_protocol(
+                    SupportProtocols::RelayV3,
+                    Box::new(relayer.clone().v3()),
+                    Arc::clone(&network_state),
+                ));
+                if !fork_enable {
+                    protocols.push(CKBProtocol::new_with_support_protocol(
+                        SupportProtocols::RelayV2,
+                        Box::new(relayer),
+                        Arc::clone(&network_state),
+                    ))
+                }
+            }
+
+            if support_protocols.contains(&SupportProtocols::Filter) {
+                let filter = BlockFilter::new(Arc::clone(&sync_shared));
+
+                protocols.push(CKBProtocol::new_with_support_protocol(
+                    SupportProtocols::Filter,
+                    Box::new(filter),
+                    Arc::clone(&network_state),
+                ));
+            }
+
+            if support_protocols.contains(&SupportProtocols::Time) {
+                let net_timer = NetTimeProtocol::default();
+                protocols.push(CKBProtocol::new_with_support_protocol(
+                    SupportProtocols::Time,
+                    Box::new(net_timer),
+                    Arc::clone(&network_state),
+                ));
+            }
+
+            if support_protocols.contains(&SupportProtocols::LightClient) {
+                let light_client = LightClientProtocol::new(shared.clone());
+                protocols.push(CKBProtocol::new_with_support_protocol(
+                    SupportProtocols::LightClient,
+                    Box::new(light_client),
+                    Arc::clone(&network_state),
+                ));
+            }
+
+            let alert_signature_config =
+                self.args.config.alert_signature.clone().unwrap_or_default();
+            let alert_relayer = AlertRelayer::new(
+                self.version.short(),
+                shared.notify_controller().clone(),
+                alert_signature_config,
+            );
+
+            let alert_notifier = Arc::clone(alert_relayer.notifier());
+            let alert_verifier = Arc::clone(alert_relayer.verifier());
+            if support_protocols.contains(&SupportProtocols::Alert) {
+                protocols.push(CKBProtocol::new_with_support_protocol(
+                    SupportProtocols::Alert,
+                    Box::new(alert_relayer),
+                    Arc::clone(&network_state),
+                ));
+            }
+
+            (
+                TentacleNetworkService::new(
+                    Arc::clone(&network_state),
+                    protocols,
+                    required_protocols,
+                    (
+                        shared.consensus().identify_name(),
+                        self.version.to_string(),
+                        flags,
+                    ),
+                )
+                .start(shared.async_handle())
+                .expect("Start network service failed"),
+                alert_notifier,
+                alert_verifier,
+            )
+        };
+        let network_controller = NetworkController::new(
+            Some(tentacle_network_controller),
+            Some(libp2p_network_controller),
+        );
 
         let rpc_config = self.adjust_rpc_config();
         let builder = ServiceBuilder::new(&rpc_config)

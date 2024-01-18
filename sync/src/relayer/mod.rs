@@ -22,15 +22,19 @@ use self::transaction_hashes_process::TransactionHashesProcess;
 use self::transactions_process::TransactionsProcess;
 use crate::block_status::BlockStatus;
 use crate::types::{ActiveChain, BlockNumberAndHash, SyncShared};
-use crate::utils::{metric_ckb_message_bytes, send_message_to, MetricDirection};
+use crate::utils::{
+    metric_ckb_message_bytes, send_message_to, send_protocol_message_with_command_sender,
+    MetricDirection,
+};
 use crate::{Status, StatusCode};
 use ckb_chain::chain::ChainController;
 use ckb_constant::sync::BAD_MESSAGE_BAN_TIME;
 use ckb_logger::{debug_target, error_target, info_target, trace_target, warn_target};
 use ckb_network::{
     async_trait, bytes::Bytes, tokio, CKBProtocolContext, CKBProtocolHandler, PeerIndex,
-    SupportProtocols, TargetSession,
+    SupportProtocols, TargetSession, TentacleSessionId,
 };
+use ckb_network::{Command, CommandSender};
 use ckb_systemtime::unix_time_as_millis;
 use ckb_tx_pool::service::TxVerificationResult;
 use ckb_types::{
@@ -106,7 +110,7 @@ impl Relayer {
 
     fn try_process(
         &mut self,
-        nc: Arc<dyn CKBProtocolContext + Sync>,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::RelayMessageUnionReader<'_>,
     ) -> Status {
@@ -126,19 +130,19 @@ impl Relayer {
 
         match message {
             packed::RelayMessageUnionReader::CompactBlock(reader) => {
-                CompactBlockProcess::new(reader, self, nc, peer).execute()
+                CompactBlockProcess::new(reader, self, command_sender, peer).execute()
             }
             packed::RelayMessageUnionReader::RelayTransactions(reader) => {
                 // after ckb2023, v2 doesn't work with relay tx
                 // before ckb2023, v3 doesn't work with relay tx
-                match RelaySwitch::new(&nc, self.v3) {
+                match RelaySwitch::new(command_sender.ckb2023(), self.v3) {
                     RelaySwitch::Ckb2023RelayV2 | RelaySwitch::Ckb2021RelayV3 => {
                         return Status::ignored()
                     }
                     RelaySwitch::Ckb2023RelayV3 | RelaySwitch::Ckb2021RelayV2 => (),
                 }
                 if reader.check_data() {
-                    TransactionsProcess::new(reader, self, nc, peer).execute()
+                    TransactionsProcess::new(reader, self, command_sender, peer).execute()
                 } else {
                     StatusCode::ProtocolMessageIsMalformed
                         .with_context("RelayTransactions is invalid")
@@ -147,7 +151,7 @@ impl Relayer {
             packed::RelayMessageUnionReader::RelayTransactionHashes(reader) => {
                 // after ckb2023, v2 doesn't work with relay tx
                 // before ckb2023, v3 doesn't work with relay tx
-                match RelaySwitch::new(&nc, self.v3) {
+                match RelaySwitch::new(command_sender.ckb2023(), self.v3) {
                     RelaySwitch::Ckb2023RelayV2 | RelaySwitch::Ckb2021RelayV3 => {
                         return Status::ignored()
                     }
@@ -158,27 +162,27 @@ impl Relayer {
             packed::RelayMessageUnionReader::GetRelayTransactions(reader) => {
                 // after ckb2023, v2 doesn't work with relay tx
                 // before ckb2023, v3 doesn't work with relay tx
-                match RelaySwitch::new(&nc, self.v3) {
+                match RelaySwitch::new(command_sender.ckb2023(), self.v3) {
                     RelaySwitch::Ckb2023RelayV2 | RelaySwitch::Ckb2021RelayV3 => {
                         return Status::ignored()
                     }
                     RelaySwitch::Ckb2023RelayV3 | RelaySwitch::Ckb2021RelayV2 => (),
                 }
-                GetTransactionsProcess::new(reader, self, nc, peer).execute()
+                GetTransactionsProcess::new(reader, self, command_sender, peer).execute()
             }
             packed::RelayMessageUnionReader::GetBlockTransactions(reader) => {
-                GetBlockTransactionsProcess::new(reader, self, nc, peer).execute()
+                GetBlockTransactionsProcess::new(reader, self, command_sender, peer).execute()
             }
             packed::RelayMessageUnionReader::BlockTransactions(reader) => {
                 if reader.check_data() {
-                    BlockTransactionsProcess::new(reader, self, nc, peer).execute()
+                    BlockTransactionsProcess::new(reader, self, command_sender, peer).execute()
                 } else {
                     StatusCode::ProtocolMessageIsMalformed
                         .with_context("BlockTransactions is invalid")
                 }
             }
             packed::RelayMessageUnionReader::GetBlockProposal(reader) => {
-                GetBlockProposalProcess::new(reader, self, nc, peer).execute()
+                GetBlockProposalProcess::new(reader, self, command_sender, peer).execute()
             }
             packed::RelayMessageUnionReader::BlockProposal(reader) => {
                 BlockProposalProcess::new(reader, self).execute()
@@ -188,13 +192,13 @@ impl Relayer {
 
     fn process(
         &mut self,
-        nc: Arc<dyn CKBProtocolContext + Sync>,
+        command_sender: CommandSender,
         peer: PeerIndex,
         message: packed::RelayMessageUnionReader<'_>,
     ) {
         let item_name = message.item_name();
         let item_bytes = message.as_slice().len() as u64;
-        let status = self.try_process(Arc::clone(&nc), peer, message);
+        let status = self.try_process(command_sender.clone(), peer, message);
 
         metric_ckb_message_bytes(
             MetricDirection::In,
@@ -213,7 +217,11 @@ impl Relayer {
                 ban_time,
                 status
             );
-            nc.ban_peer(peer, ban_time, status.to_string());
+            command_sender.send(Command::Ban {
+                peer,
+                duration: ban_time,
+                reason: status.to_string(),
+            });
         } else if status.should_warn() {
             warn_target!(
                 crate::LOG_TARGET_RELAY,
@@ -236,7 +244,7 @@ impl Relayer {
     /// Request the transaction corresponding to the proposal id from the specified node
     pub fn request_proposal_txs(
         &self,
-        nc: &dyn CKBProtocolContext,
+        command_sender: CommandSender,
         peer: PeerIndex,
         block_hash_and_number: BlockNumberAndHash,
         proposals: Vec<packed::ProposalShortId>,
@@ -269,7 +277,7 @@ impl Relayer {
                 .proposals(to_ask_proposals.clone().pack())
                 .build();
             let message = packed::RelayMessage::new_builder().set(content).build();
-            if !send_message_to(nc, peer, &message).is_ok() {
+            if !send_protocol_message_with_command_sender(&command_sender, peer, &message).is_ok() {
                 self.shared()
                     .state()
                     .remove_inflight_proposals(&to_ask_proposals);
@@ -281,7 +289,7 @@ impl Relayer {
     #[allow(clippy::needless_collect)]
     pub fn accept_block(
         &self,
-        nc: &dyn CKBProtocolContext,
+        command_sender: CommandSender,
         peer: PeerIndex,
         block: core::BlockView,
     ) {
@@ -310,73 +318,68 @@ impl Relayer {
             let cb = packed::CompactBlock::build_from_block(&boxed, &HashSet::new());
             let message = packed::RelayMessage::new_builder().set(cb).build();
 
-            let selected_peers: Vec<PeerIndex> = nc
-                .connected_peers()
+            let selected_peers: Vec<_> = command_sender
+                .get_connected_peers()
                 .into_iter()
                 .filter(|target_peer| peer != *target_peer)
+                .filter_map(|peer| match peer {
+                    PeerIndex::Tentacle(s) => Some(s),
+                    PeerIndex::Libp2p(_) => None,
+                })
                 .take(MAX_RELAY_PEERS)
                 .collect();
-            if let Err(err) = nc.quick_filter_broadcast(
-                TargetSession::Multi(Box::new(selected_peers.into_iter())),
-                message.as_bytes(),
-            ) {
-                debug_target!(
-                    crate::LOG_TARGET_RELAY,
-                    "relayer send block when accept block error: {:?}",
-                    err,
-                );
-            }
-
-            if let Some(p2p_control) = nc.p2p_control() {
-                let snapshot = self.shared.shared().snapshot();
-                let parent_chain_root = {
-                    let mmr = snapshot.chain_root_mmr(boxed.header().number() - 1);
-                    match mmr.get_root() {
-                        Ok(root) => root,
-                        Err(err) => {
-                            error_target!(
-                                crate::LOG_TARGET_RELAY,
-                                "Generate last state to light client failed: {:?}",
-                                err
-                            );
-                            return;
-                        }
+            command_sender.send(Command::FilterBroadCast {
+                protocol: command_sender.protocol(),
+                target: TargetSession::Multi(Box::new(selected_peers.into_iter())).into(),
+                message: message.as_bytes(),
+                quick: true,
+            });
+            let snapshot = self.shared.shared().snapshot();
+            let parent_chain_root = {
+                let mmr = snapshot.chain_root_mmr(boxed.header().number() - 1);
+                match mmr.get_root() {
+                    Ok(root) => root,
+                    Err(err) => {
+                        error_target!(
+                            crate::LOG_TARGET_RELAY,
+                            "Generate last state to light client failed: {:?}",
+                            err
+                        );
+                        return;
                     }
-                };
-
-                let tip_header = packed::VerifiableHeader::new_builder()
-                    .header(boxed.header().data())
-                    .uncles_hash(boxed.calc_uncles_hash())
-                    .extension(Pack::pack(&boxed.extension()))
-                    .parent_chain_root(parent_chain_root)
-                    .build();
-                let light_client_message = {
-                    let content = packed::SendLastState::new_builder()
-                        .last_header(tip_header)
-                        .build();
-                    packed::LightClientMessage::new_builder()
-                        .set(content)
-                        .build()
-                };
-                let light_client_peers: HashSet<PeerIndex> = nc
-                    .connected_peers()
-                    .into_iter()
-                    .filter_map(|index| nc.get_peer(index).map(|peer| (index, peer)))
-                    .filter(|(_id, peer)| peer.if_lightclient_subscribed)
-                    .map(|(id, _)| id)
-                    .collect();
-                if let Err(err) = p2p_control.filter_broadcast(
-                    TargetSession::Filter(Box::new(move |id| light_client_peers.contains(id))),
-                    SupportProtocols::LightClient.protocol_id(),
-                    light_client_message.as_bytes(),
-                ) {
-                    debug_target!(
-                        crate::LOG_TARGET_RELAY,
-                        "relayer send last state to light client when accept block, error: {:?}",
-                        err,
-                    );
                 }
-            }
+            };
+
+            let tip_header = packed::VerifiableHeader::new_builder()
+                .header(boxed.header().data())
+                .uncles_hash(boxed.calc_uncles_hash())
+                .extension(Pack::pack(&boxed.extension()))
+                .parent_chain_root(parent_chain_root)
+                .build();
+            let light_client_message = {
+                let content = packed::SendLastState::new_builder()
+                    .last_header(tip_header)
+                    .build();
+                packed::LightClientMessage::new_builder()
+                    .set(content)
+                    .build()
+            };
+            let light_client_peers: HashSet<PeerIndex> = command_sender
+                .get_connected_peers()
+                .into_iter()
+                .filter_map(|index| command_sender.get_peer(index).map(|peer| (index, peer)))
+                .filter(|(_id, peer)| peer.if_lightclient_subscribed)
+                .map(|(id, _)| id)
+                .collect();
+            command_sender.send(Command::FilterBroadCast {
+                protocol: SupportProtocols::LightClient,
+                target: TargetSession::Filter(Box::new(move |id| {
+                    light_client_peers.contains(&id.into())
+                }))
+                .into(),
+                message: light_client_message.as_bytes(),
+                quick: false,
+            });
         }
     }
 
@@ -428,7 +431,7 @@ impl Relayer {
             if let Err(e) = fetch_txs {
                 return ReconstructionResult::Error(StatusCode::TxPool.with_context(e));
             }
-            txs_map.extend(fetch_txs.unwrap().into_iter());
+            txs_map.extend(fetch_txs.unwrap());
         }
 
         let txs_len = compact_block.txs_len();
@@ -734,7 +737,7 @@ impl Relayer {
                 .build();
             let message = packed::RelayMessage::new_builder().set(content).build();
 
-            if let Err(err) = nc.filter_broadcast(TargetSession::Single(peer), message.as_bytes()) {
+            if let Err(err) = nc.send_message_to(peer, message.as_bytes()) {
                 debug_target!(
                     crate::LOG_TARGET_RELAY,
                     "relayer send TransactionHashes error: {:?}",
@@ -766,9 +769,10 @@ impl CKBProtocolHandler for Relayer {
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer_index = session_id.into();
         // If self is in the IBD state, don't process any relayer message.
         if self.shared.active_chain().is_initial_block_download() {
             return;
@@ -852,7 +856,11 @@ impl CKBProtocolHandler for Relayer {
         }
 
         let start_time = Instant::now();
-        tokio::task::block_in_place(|| self.process(nc, peer_index, msg));
+        let (command_sender, command_receiver) = CommandSender::new_from_nc(nc.clone());
+        tokio::task::block_in_place(move || {
+            tokio::task::block_in_place(move || self.process(command_sender, peer_index, msg));
+        });
+        let _ = nc.process_command_stream(command_receiver).await;
         debug_target!(
             crate::LOG_TARGET_RELAY,
             "process message={}, peer={}, cost={:?}",
@@ -865,9 +873,10 @@ impl CKBProtocolHandler for Relayer {
     async fn connected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         version: &str,
     ) {
+        let peer_index = session_id.into();
         self.shared().state().peers().relay_connected(peer_index);
         info_target!(
             crate::LOG_TARGET_RELAY,
@@ -880,12 +889,12 @@ impl CKBProtocolHandler for Relayer {
     async fn disconnected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
     ) {
         info_target!(
             crate::LOG_TARGET_RELAY,
             "RelayProtocol.disconnected peer={}",
-            peer_index
+            session_id
         );
         // Retains all keys in the rate limiter that were used recently enough.
         self.rate_limiter.lock().retain_recent();
@@ -897,7 +906,7 @@ impl CKBProtocolHandler for Relayer {
             return;
         }
 
-        match RelaySwitch::new(&nc, self.v3) {
+        match RelaySwitch::new(nc.ckb2023(), self.v3) {
             RelaySwitch::Ckb2021RelayV3 => return,
             RelaySwitch::Ckb2023RelayV2 => {
                 if nc.remove_notify(TX_PROPOSAL_TOKEN).await.is_err() {
@@ -959,8 +968,8 @@ enum RelaySwitch {
 }
 
 impl RelaySwitch {
-    fn new(nc: &Arc<dyn CKBProtocolContext + Sync>, is_relay_v3: bool) -> Self {
-        match (nc.ckb2023(), is_relay_v3) {
+    fn new(is_ckb2023: bool, is_relay_v3: bool) -> Self {
+        match (is_ckb2023, is_relay_v3) {
             (true, true) => Self::Ckb2023RelayV3,
             (true, false) => Self::Ckb2023RelayV2,
             (false, true) => Self::Ckb2021RelayV3,

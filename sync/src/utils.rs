@@ -1,7 +1,9 @@
 use crate::{Status, StatusCode};
 use ckb_error::{Error as CKBError, ErrorKind, InternalError, InternalErrorKind};
 use ckb_logger::error;
-use ckb_network::{CKBProtocolContext, PeerIndex, ProtocolId, SupportProtocols};
+use ckb_network::{
+    CKBProtocolContext, Command, CommandSender, PeerIndex, ProtocolId, SupportProtocols,
+};
 use ckb_types::packed::{RelayMessageReader, SyncMessageReader};
 use ckb_types::prelude::*;
 use std::fmt;
@@ -27,6 +29,35 @@ pub(crate) fn send_message<Message: Entity>(
     let bytes = message.as_bytes().len() as u64;
     let item_name = item_name(protocol_id, message);
     let protocol_name = protocol_name(protocol_id);
+    metric_ckb_message_bytes(
+        MetricDirection::Out,
+        &protocol_name,
+        &item_name,
+        None,
+        bytes,
+    );
+
+    Status::ok()
+}
+
+/// Send network message into parameterized `protocol_id` protocol connection.
+///
+/// Equal to `nc.send_message`.
+#[must_use]
+pub(crate) fn send_message_with_command_sender<Message: Entity>(
+    comand_sender: &CommandSender,
+    protocol: SupportProtocols,
+    peer_index: PeerIndex,
+    message: &Message,
+) -> Status {
+    comand_sender.send(Command::SendMessage {
+        protocol,
+        peer: peer_index,
+        message: message.as_bytes(),
+    });
+    let bytes = message.as_bytes().len() as u64;
+    let item_name = item_name(protocol.protocol_id(), message);
+    let protocol_name = protocol.name();
     metric_ckb_message_bytes(
         MetricDirection::Out,
         &protocol_name,
@@ -81,8 +112,26 @@ pub(crate) fn send_message_to<Message: Entity>(
     peer_index: PeerIndex,
     message: &Message,
 ) -> Status {
-    let protocol_id = nc.protocol_id();
-    send_message(protocol_id, nc, peer_index, message)
+    // TOOD: don't hard code this
+    let protocol = SupportProtocols::Sync;
+    send_message(protocol.protocol_id(), nc, peer_index, message)
+}
+
+/// Send network message into `nc.protocol_id()` protocol connection.
+///
+/// Equal to `nc.send_message_to`.
+#[must_use]
+pub(crate) fn send_protocol_message_with_command_sender<Message: Entity>(
+    command_sender: &CommandSender,
+    peer_index: PeerIndex,
+    message: &Message,
+) -> Status {
+    send_message_with_command_sender(
+        command_sender,
+        command_sender.protocol(),
+        peer_index,
+        message,
+    )
 }
 
 // As for Sync protocol and Relay protocol, returns the internal item name;

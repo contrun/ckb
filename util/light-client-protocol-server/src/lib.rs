@@ -5,7 +5,9 @@
 use std::sync::Arc;
 
 use ckb_logger::{debug, error, info, trace, warn};
-use ckb_network::{async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, PeerIndex};
+use ckb_network::{
+    async_trait, bytes::Bytes, CKBProtocolContext, CKBProtocolHandler, TentacleSessionId,
+};
 use ckb_shared::Shared;
 use ckb_store::ChainStore;
 use ckb_types::{core, packed, prelude::*};
@@ -42,22 +44,27 @@ impl CKBProtocolHandler for LightClientProtocol {
     async fn connected(
         &mut self,
         _nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer: PeerIndex,
+        peer: TentacleSessionId,
         version: &str,
     ) {
         info!("LightClient({}).connected peer={}", version, peer);
     }
 
-    async fn disconnected(&mut self, _nc: Arc<dyn CKBProtocolContext + Sync>, peer: PeerIndex) {
+    async fn disconnected(
+        &mut self,
+        _nc: Arc<dyn CKBProtocolContext + Sync>,
+        peer: TentacleSessionId,
+    ) {
         info!("LightClient.disconnected peer={}", peer);
     }
 
     async fn received(
         &mut self,
         nc: Arc<dyn CKBProtocolContext + Sync>,
-        peer: PeerIndex,
+        session_id: TentacleSessionId,
         data: Bytes,
     ) {
+        let peer = session_id.into();
         trace!("LightClient.received peer={}", peer);
 
         let msg = match packed::LightClientMessageReader::from_slice(&data) {
@@ -77,7 +84,7 @@ impl CKBProtocolHandler for LightClientProtocol {
         };
 
         let item_name = msg.item_name();
-        let status = self.try_process(nc.as_ref(), peer, msg);
+        let status = self.try_process(nc.as_ref(), session_id, msg);
         if let Some(ban_time) = status.should_ban() {
             error!(
                 "process {} from {}, ban {:?} since result is {}",
@@ -96,21 +103,21 @@ impl LightClientProtocol {
     fn try_process(
         &mut self,
         nc: &dyn CKBProtocolContext,
-        peer_index: PeerIndex,
+        session_id: TentacleSessionId,
         message: packed::LightClientMessageUnionReader<'_>,
     ) -> Status {
         match message {
             packed::LightClientMessageUnionReader::GetLastState(reader) => {
-                components::GetLastStateProcess::new(reader, self, peer_index, nc).execute()
+                components::GetLastStateProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetLastStateProof(reader) => {
-                components::GetLastStateProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetLastStateProofProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetBlocksProof(reader) => {
-                components::GetBlocksProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetBlocksProofProcess::new(reader, self, session_id, nc).execute()
             }
             packed::LightClientMessageUnionReader::GetTransactionsProof(reader) => {
-                components::GetTransactionsProofProcess::new(reader, self, peer_index, nc).execute()
+                components::GetTransactionsProofProcess::new(reader, self, session_id, nc).execute()
             }
             _ => StatusCode::UnexpectedProtocolMessage.into(),
         }
@@ -146,7 +153,11 @@ impl LightClientProtocol {
         Ok(tip_header)
     }
 
-    pub(crate) fn reply_tip_state<T>(&self, peer: PeerIndex, nc: &dyn CKBProtocolContext) -> Status
+    pub(crate) fn reply_tip_state<T>(
+        &self,
+        peer: TentacleSessionId,
+        nc: &dyn CKBProtocolContext,
+    ) -> Status
     where
         T: Entity,
         <T as Entity>::Builder: ProverMessageBuilder,
@@ -168,7 +179,7 @@ impl LightClientProtocol {
 
     pub(crate) fn reply_proof<T>(
         &self,
-        peer: PeerIndex,
+        peer: TentacleSessionId,
         nc: &dyn CKBProtocolContext,
         last_block: &core::BlockView,
         items_positions: Vec<u64>,

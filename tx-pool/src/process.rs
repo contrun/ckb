@@ -265,7 +265,7 @@ impl TxPoolService {
         if let Err(reject) = non_contextual_verify(&self.consensus, tx) {
             if reject.is_malformed_tx() {
                 if let Some(remote) = remote {
-                    self.ban_malformed(remote.1, format!("reject {reject}"));
+                    self.ban_malformed(remote.1, &format!("reject {reject}"));
                 }
             }
             return Err(reject);
@@ -412,7 +412,7 @@ impl TxPoolService {
                         self.add_orphan(tx, peer, declared_cycle).await;
                     } else {
                         if reject.is_malformed_tx() {
-                            self.ban_malformed(peer, format!("reject {reject}"));
+                            self.ban_malformed(peer, &format!("reject {reject}"));
                         }
                         if reject.is_allowed_relay() {
                             self.send_result_to_relayer(TxVerificationResult::Reject {
@@ -558,7 +558,7 @@ impl TxPoolService {
                             if !is_missing_input(&reject) {
                                 self.remove_orphan_tx(&orphan.tx.proposal_short_id()).await;
                                 if reject.is_malformed_tx() {
-                                    self.ban_malformed(orphan.peer, format!("reject {reject}"));
+                                    self.ban_malformed(orphan.peer, &format!("reject {reject}"));
                                 }
                                 if reject.is_allowed_relay() {
                                     self.send_result_to_relayer(TxVerificationResult::Reject {
@@ -587,7 +587,7 @@ impl TxPoolService {
         }
     }
 
-    fn ban_malformed(&self, peer: PeerIndex, reason: String) {
+    fn ban_malformed(&self, peer: PeerIndex, reason: &str) {
         const DEFAULT_BAN_TIME: Duration = Duration::from_secs(3600 * 24 * 3);
 
         #[cfg(feature = "with_sentry")]

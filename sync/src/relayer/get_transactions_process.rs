@@ -1,16 +1,15 @@
 use crate::relayer::{Relayer, MAX_RELAY_TXS_BYTES_PER_BATCH, MAX_RELAY_TXS_NUM_PER_BATCH};
-use crate::utils::send_message_to;
+use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status, StatusCode};
 use ckb_logger::{debug_target, trace_target};
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{packed, prelude::*};
 use std::collections::HashSet;
-use std::sync::Arc;
 
 pub struct GetTransactionsProcess<'a> {
     message: packed::GetRelayTransactionsReader<'a>,
     relayer: &'a Relayer,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 }
 
@@ -18,13 +17,13 @@ impl<'a> GetTransactionsProcess<'a> {
     pub fn new(
         message: packed::GetRelayTransactionsReader<'a>,
         relayer: &'a Relayer,
-        nc: Arc<dyn CKBProtocolContext>,
+        command_sender: CommandSender,
         peer: PeerIndex,
     ) -> Self {
         GetTransactionsProcess {
             message,
             relayer,
-            nc,
+            command_sender,
             peer,
         }
     }
@@ -110,6 +109,6 @@ impl<'a> GetTransactionsProcess<'a> {
                     .build(),
             )
             .build();
-        send_message_to(self.nc.as_ref(), self.peer, &message)
+        send_protocol_message_with_command_sender(&self.command_sender.clone(), self.peer, &message)
     }
 }

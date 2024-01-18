@@ -1,20 +1,23 @@
 //! Peer registry
+use crate::peer::ConnectionType;
 use crate::peer_store::PeerStore;
 use crate::{
     errors::{Error, PeerError},
-    extract_peer_id, Peer, PeerId, SessionType,
+    Peer, PeerId, SessionType, TentaclePeerId,
 };
-use ckb_logger::debug;
-use p2p::{multiaddr::Multiaddr, SessionId};
+use crate::{Multiaddr, PeerIndex};
+use ckb_logger::{debug, info};
+use core::panic;
+use libp2p::{identify::Info as Libp2pIdentifyInfo, PeerId as Libp2pPeerId};
+use p2p::SessionId;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::collections::{HashMap, HashSet};
-
 pub(crate) const EVICTION_PROTECT_PEERS: usize = 8;
 
 /// Memory records of opened session information
 pub struct PeerRegistry {
-    peers: HashMap<SessionId, Peer>,
+    peers: HashMap<PeerIndex, Peer>,
     // max inbound limitation
     max_inbound: u32,
     // max outbound limitation
@@ -60,7 +63,10 @@ impl PeerRegistry {
     ) -> Self {
         PeerRegistry {
             peers: HashMap::with_capacity_and_hasher(20, Default::default()),
-            whitelist_peers: whitelist_peers.iter().filter_map(extract_peer_id).collect(),
+            whitelist_peers: whitelist_peers
+                .iter()
+                .filter_map(|a| PeerId::try_from(a).map(Into::into).ok())
+                .collect(),
             feeler_peers: HashSet::default(),
             max_inbound,
             max_outbound,
@@ -71,19 +77,23 @@ impl PeerRegistry {
     pub(crate) fn accept_peer(
         &mut self,
         remote_addr: Multiaddr,
-        session_id: SessionId,
+        session_id: impl Into<PeerIndex>,
         session_type: SessionType,
         peer_store: &mut PeerStore,
     ) -> Result<Option<Peer>, Error> {
-        if self.peers.contains_key(&session_id) {
-            return Err(PeerError::SessionExists(session_id).into());
+        let index = session_id.into();
+        if self.peers.contains_key(&index) {
+            return Err(PeerError::SessionExists(index).into());
         }
-        let peer_id = extract_peer_id(&remote_addr).expect("opened session should have peer id");
+        let peer_id = match PeerId::try_from(&remote_addr) {
+            Ok(PeerId::Tentacle(peer_id)) => peer_id,
+            _ => panic!("opened session should have peer id"),
+        };
         if self.get_key_by_peer_id(&peer_id).is_some() {
             return Err(PeerError::PeerIdExists(peer_id).into());
         }
 
-        let is_whitelist = self.whitelist_peers.contains(&peer_id);
+        let is_whitelist = self.whitelist_peers.contains(&peer_id.into());
         let mut evicted_peer: Option<Peer> = None;
 
         if !is_whitelist {
@@ -108,14 +118,39 @@ impl PeerRegistry {
                 return Err(PeerError::ReachMaxOutboundLimit.into());
             }
         }
-        peer_store.add_connected_peer(remote_addr.clone(), session_type);
-        let peer = Peer::new(session_id, session_type, remote_addr, is_whitelist);
-        self.peers.insert(session_id, peer);
+        peer_store.add_connected_peer(remote_addr.clone());
+        let peer = Peer::new(index, session_type, remote_addr, is_whitelist);
+        self.peers.insert(index, peer);
         Ok(evicted_peer)
     }
 
+    pub fn accept_libp2p_peer(
+        &mut self,
+        peer_id: Libp2pPeerId,
+        info: Libp2pIdentifyInfo,
+        peer_store: &mut PeerStore,
+    ) -> Result<(), Error> {
+        let index = peer_id.into();
+        if self.peers.contains_key(&index) {
+            return Err(PeerError::SessionExists(index).into());
+        }
+        // TODO: Some security mitigations are not implemented for libp2p,
+        // accept_peer for tentacle above
+
+        let mut addr = info.observed_addr.clone();
+        addr.push(libp2p::multiaddr::Protocol::P2p(peer_id));
+        info!(
+            "Adding peer to peer store {:?} {:?}",
+            &info.observed_addr, &addr
+        );
+        peer_store.add_connected_peer((&addr).into());
+        let peer = Peer::new(index, ConnectionType::Unknown, addr, false);
+        self.peers.insert(index, peer);
+        Ok(())
+    }
+
     // try to evict an inbound peer
-    fn try_evict_inbound_peer(&self, _peer_store: &PeerStore) -> Option<SessionId> {
+    fn try_evict_inbound_peer(&self, _peer_store: &PeerStore) -> Option<PeerIndex> {
         let mut candidate_peers = {
             self.peers
                 .values()
@@ -166,13 +201,13 @@ impl PeerRegistry {
         // Group peers by network group
         let evict_group = candidate_peers
             .into_iter()
-            .fold(HashMap::new(), |mut groups, peer| {
-                groups
-                    .entry(peer.network_group())
-                    .or_insert_with(Vec::new)
-                    .push(peer);
-                groups
-            })
+            .fold(
+                HashMap::new(),
+                |mut groups: HashMap<crate::network_group::Group, Vec<&Peer>>, peer| {
+                    groups.entry(peer.network_group()).or_default().push(peer);
+                    groups
+                },
+            )
             .values()
             .max_by_key(|group| group.len())
             .cloned()
@@ -182,66 +217,78 @@ impl PeerRegistry {
         let mut rng = thread_rng();
         evict_group.choose(&mut rng).map(|peer| {
             debug!("evict inbound peer {:?}", peer.connected_addr);
-            peer.session_id
+            peer.index
         })
     }
 
     /// Add feeler dail task
     pub fn add_feeler(&mut self, addr: &Multiaddr) {
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.feeler_peers.insert(peer_id);
         }
     }
 
     /// Remove feeler dail task on session disconnects or fails
     pub fn remove_feeler(&mut self, addr: &Multiaddr) {
-        if let Some(peer_id) = extract_peer_id(addr) {
+        if let Ok(peer_id) = PeerId::try_from(addr) {
             self.feeler_peers.remove(&peer_id);
         }
     }
 
     /// Whether this session is feeler session
     pub fn is_feeler(&self, addr: &Multiaddr) -> bool {
-        extract_peer_id(addr)
+        PeerId::try_from(addr)
             .map(|peer_id| self.feeler_peers.contains(&peer_id))
             .unwrap_or_default()
     }
 
     /// Get peer info
-    pub fn get_peer(&self, session_id: SessionId) -> Option<&Peer> {
-        self.peers.get(&session_id)
+    pub fn get_peer(&self, session_id: impl Into<PeerIndex>) -> Option<&Peer> {
+        let p = session_id.into();
+        self.peers.get(&p)
     }
 
     /// Get mut peer info
-    pub fn get_peer_mut(&mut self, session_id: SessionId) -> Option<&mut Peer> {
-        self.peers.get_mut(&session_id)
+    pub fn get_peer_mut(&mut self, session_id: impl Into<PeerIndex>) -> Option<&mut Peer> {
+        let p = session_id.into();
+        self.peers.get_mut(&p)
     }
 
-    pub(crate) fn remove_peer(&mut self, session_id: SessionId) -> Option<Peer> {
-        self.peers.remove(&session_id)
+    pub(crate) fn remove_peer(&mut self, session_id: impl Into<PeerIndex>) -> Option<Peer> {
+        let p = session_id.into();
+        self.peers.remove(&p)
     }
 
     /// Get session id by peer id
-    pub fn get_key_by_peer_id(&self, peer_id: &PeerId) -> Option<SessionId> {
+    pub fn get_key_by_peer_id(&self, peer_id: &TentaclePeerId) -> Option<SessionId> {
         self.peers.iter().find_map(|(session_id, peer)| {
-            extract_peer_id(&peer.connected_addr).and_then(|pid| {
-                if &pid == peer_id {
-                    Some(*session_id)
-                } else {
-                    None
-                }
-            })
+            PeerId::try_from(&peer.connected_addr)
+                .ok()
+                .and_then(|pid| match pid {
+                    PeerId::Tentacle(pid) if &pid == peer_id => match session_id {
+                        PeerIndex::Tentacle(s) => Some(*s),
+                        _ => panic!("Expect to get a session id for peer"),
+                    },
+                    _ => None,
+                })
         })
     }
 
     /// Get all connected peers' information
-    pub fn peers(&self) -> &HashMap<SessionId, Peer> {
+    pub fn peers(&self) -> &HashMap<PeerIndex, Peer> {
         &self.peers
     }
 
     /// Get all sessions' id
     pub fn connected_peers(&self) -> Vec<SessionId> {
-        self.peers.keys().cloned().collect()
+        self.peers
+            .keys()
+            .cloned()
+            .filter_map(|index| match index {
+                PeerIndex::Tentacle(s) => Some(s),
+                PeerIndex::Libp2p(_) => None,
+            })
+            .collect()
     }
 
     pub(crate) fn connection_status(&self) -> ConnectionStatus {

@@ -1,11 +1,12 @@
 use crate::{
+    peer::PeerType,
     peer_store::{types::AddrInfo, PeerStore},
-    NetworkState,
+    Multiaddr, NetworkState,
 };
 use ckb_logger::trace;
 use ckb_systemtime::unix_time_as_millis;
 use futures::Future;
-use p2p::{multiaddr::MultiAddr, service::ServiceControl};
+use p2p::service::ServiceControl;
 use rand::prelude::IteratorRandom;
 use std::{
     pin::Pin,
@@ -47,7 +48,8 @@ impl OutboundPeerService {
     fn dial_feeler(&mut self) {
         let now_ms = unix_time_as_millis();
         let attempt_peers = self.network_state.with_peer_store_mut(|peer_store| {
-            let paddrs = peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT);
+            let paddrs =
+                peer_store.fetch_addrs_to_feeler(FEELER_CONNECTION_COUNT, PeerType::Tentacle);
             for paddr in paddrs.iter() {
                 // mark addr as tried
                 if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
@@ -64,7 +66,8 @@ impl OutboundPeerService {
         );
 
         for addr in attempt_peers.into_iter().map(|info| info.addr) {
-            self.network_state.dial_feeler(&self.p2p_control, addr);
+            self.network_state
+                .dial_feeler(&self.p2p_control, addr);
         }
     }
 
@@ -82,7 +85,8 @@ impl OutboundPeerService {
         let target = &self.network_state.required_flags;
 
         let f = |peer_store: &mut PeerStore, number: usize, now_ms: u64| -> Vec<AddrInfo> {
-            let paddrs = peer_store.fetch_addrs_to_attempt(number, *target);
+            let paddrs =
+                peer_store.fetch_addrs_to_attempt(number, Some(*target), PeerType::Tentacle);
             for paddr in paddrs.iter() {
                 // mark addr as tried
                 if let Some(paddr) = peer_store.mut_addr_manager().get_mut(&paddr.addr) {
@@ -92,7 +96,7 @@ impl OutboundPeerService {
             paddrs
         };
 
-        let peers: Box<dyn Iterator<Item = MultiAddr>> = if self.try_identify_count > 3 {
+        let peers: Box<dyn Iterator<Item = Multiaddr>> = if self.try_identify_count > 3 {
             self.try_identify_count = 0;
             let len = self.network_state.bootnodes.len();
             if len < count {
@@ -139,7 +143,8 @@ impl OutboundPeerService {
 
     fn try_dial_whitelist(&self) {
         for addr in self.network_state.config.whitelist_peers() {
-            self.network_state.dial_identify(&self.p2p_control, addr);
+            self.network_state
+                .dial_identify(&self.p2p_control, addr.into());
         }
     }
 

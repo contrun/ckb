@@ -1,7 +1,7 @@
 use std::cmp::{min, Ordering};
 
 use ckb_merkle_mountain_range::leaf_index_to_pos;
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CKBProtocolContext, TentacleSessionId};
 use ckb_shared::Snapshot;
 use ckb_store::ChainStore;
 use ckb_types::{core::BlockNumber, packed, prelude::*, U256};
@@ -11,7 +11,7 @@ use crate::{constant, LightClientProtocol, Status, StatusCode};
 pub(crate) struct GetLastStateProofProcess<'a> {
     message: packed::GetLastStateProofReader<'a>,
     protocol: &'a LightClientProtocol,
-    peer: PeerIndex,
+    peer: TentacleSessionId,
     nc: &'a dyn CKBProtocolContext,
 }
 
@@ -181,7 +181,7 @@ impl<'a> GetLastStateProofProcess<'a> {
     pub(crate) fn new(
         message: packed::GetLastStateProofReader<'a>,
         protocol: &'a LightClientProtocol,
-        peer: PeerIndex,
+        peer: TentacleSessionId,
         nc: &'a dyn CKBProtocolContext,
     ) -> Self {
         Self {

@@ -1,4 +1,4 @@
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CKBProtocolContext, TentacleSessionId};
 use ckb_types::{packed, prelude::*};
 
 use crate::{prelude::*, LightClientProtocol, Status, StatusCode};
@@ -6,7 +6,7 @@ use crate::{prelude::*, LightClientProtocol, Status, StatusCode};
 pub(crate) struct GetLastStateProcess<'a> {
     message: packed::GetLastStateReader<'a>,
     protocol: &'a LightClientProtocol,
-    peer: PeerIndex,
+    peer: TentacleSessionId,
     nc: &'a dyn CKBProtocolContext,
 }
 
@@ -14,7 +14,7 @@ impl<'a> GetLastStateProcess<'a> {
     pub(crate) fn new(
         message: packed::GetLastStateReader<'a>,
         protocol: &'a LightClientProtocol,
-        peer: PeerIndex,
+        peer: TentacleSessionId,
         nc: &'a dyn CKBProtocolContext,
     ) -> Self {
         Self {
@@ -29,7 +29,7 @@ impl<'a> GetLastStateProcess<'a> {
         let subscribe: bool = self.message.subscribe().unpack();
         if subscribe {
             self.nc.with_peer_mut(
-                self.peer,
+                self.peer.into(),
                 Box::new(|peer| {
                     peer.if_lightclient_subscribed = true;
                 }),
