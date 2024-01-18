@@ -1,4 +1,4 @@
-use crate::network::async_disconnect_with_message;
+use crate::network::tentacle_async_disconnect_with_message;
 use crate::{Flags, NetworkState};
 use ckb_logger::debug;
 use p2p::{
@@ -31,7 +31,7 @@ impl ServiceProtocol for Feeler {
                 .peer_store
                 .lock()
                 .mut_addr_manager()
-                .remove(&session.address);
+                .remove(&(&session.address).into());
         } else if context.session.ty.is_outbound() {
             let flags = self.network_state.with_peer_registry(|reg| {
                 if let Some(p) = reg.get_peer(session.id) {
@@ -44,13 +44,17 @@ impl ServiceProtocol for Feeler {
                 }
             });
             self.network_state.with_peer_store_mut(|peer_store| {
-                peer_store.add_outbound_addr(session.address.clone(), flags);
+                peer_store.add_outbound_addr((&session.address).into(), flags);
             });
         }
 
         debug!("peer={} FeelerProtocol.connected", session.address);
-        if let Err(err) =
-            async_disconnect_with_message(context.control(), session.id, "feeler connection").await
+        if let Err(err) = tentacle_async_disconnect_with_message(
+            context.control(),
+            session.id,
+            "feeler connection",
+        )
+        .await
         {
             debug!("Disconnect failed {:?}, error: {:?}", session.id, err);
         }
@@ -59,7 +63,7 @@ impl ServiceProtocol for Feeler {
     async fn disconnected(&mut self, context: ProtocolContextMutRef<'_>) {
         let session = context.session;
         self.network_state.with_peer_registry_mut(|reg| {
-            reg.remove_feeler(&session.address);
+            reg.remove_feeler(&(&session.address).into());
         });
         debug!("peer={} FeelerProtocol.disconnected", session.address);
     }

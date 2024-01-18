@@ -1,10 +1,9 @@
 use crate::filter::BlockFilter;
-use crate::utils::send_message_to;
+use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status};
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::core::BlockNumber;
 use ckb_types::{packed, prelude::*};
-use std::sync::Arc;
 
 const BATCH_SIZE: BlockNumber = 2000;
 const CHECK_POINT_INTERVAL: BlockNumber = 2000;
@@ -12,7 +11,7 @@ const CHECK_POINT_INTERVAL: BlockNumber = 2000;
 pub struct GetBlockFilterCheckPointsProcess<'a> {
     message: packed::GetBlockFilterCheckPointsReader<'a>,
     filter: &'a BlockFilter,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 }
 
@@ -20,12 +19,12 @@ impl<'a> GetBlockFilterCheckPointsProcess<'a> {
     pub fn new(
         message: packed::GetBlockFilterCheckPointsReader<'a>,
         filter: &'a BlockFilter,
-        nc: Arc<dyn CKBProtocolContext>,
+        command_sender: CommandSender,
         peer: PeerIndex,
     ) -> Self {
         Self {
             message,
-            nc,
+            command_sender,
             filter,
             peer,
         }
@@ -59,7 +58,11 @@ impl<'a> GetBlockFilterCheckPointsProcess<'a> {
             let message = packed::BlockFilterMessage::new_builder()
                 .set(content)
                 .build();
-            attempt!(send_message_to(self.nc.as_ref(), self.peer, &message));
+            attempt!(send_protocol_message_with_command_sender(
+                &self.command_sender,
+                self.peer,
+                &message
+            ));
         }
 
         Status::ok()

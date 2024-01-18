@@ -1,13 +1,12 @@
 use crate::relayer::block_transactions_verifier::BlockTransactionsVerifier;
 use crate::relayer::block_uncles_verifier::BlockUnclesVerifier;
 use crate::relayer::{ReconstructionResult, Relayer};
-use crate::utils::send_message_to;
+use crate::utils::send_protocol_message_with_command_sender;
 use crate::{attempt, Status, StatusCode};
-use ckb_network::{CKBProtocolContext, PeerIndex};
+use ckb_network::{CommandSender, PeerIndex};
 use ckb_types::{core, packed, prelude::*};
 use std::collections::hash_map::Entry;
 use std::mem;
-use std::sync::Arc;
 
 // Keeping in mind that short_ids are expected to occasionally collide.
 // On receiving block-transactions message,
@@ -23,7 +22,7 @@ use std::sync::Arc;
 pub struct BlockTransactionsProcess<'a> {
     message: packed::BlockTransactionsReader<'a>,
     relayer: &'a Relayer,
-    nc: Arc<dyn CKBProtocolContext>,
+    command_sender: CommandSender,
     peer: PeerIndex,
 }
 
@@ -31,13 +30,13 @@ impl<'a> BlockTransactionsProcess<'a> {
     pub fn new(
         message: packed::BlockTransactionsReader<'a>,
         relayer: &'a Relayer,
-        nc: Arc<dyn CKBProtocolContext>,
+        command_sender: CommandSender,
         peer: PeerIndex,
     ) -> Self {
         BlockTransactionsProcess {
             message,
             relayer,
-            nc,
+            command_sender,
             peer,
         }
     }
@@ -102,7 +101,7 @@ impl<'a> BlockTransactionsProcess<'a> {
                         .flat_map(|u| u.data().proposals().into_iter())
                         .collect();
                     self.relayer.request_proposal_txs(
-                        self.nc.as_ref(),
+                        self.command_sender.clone(),
                         self.peer,
                         (
                             compact_block.header().into_view().number(),
@@ -117,7 +116,7 @@ impl<'a> BlockTransactionsProcess<'a> {
                     ReconstructionResult::Block(block) => {
                         pending.remove();
                         self.relayer
-                            .accept_block(self.nc.as_ref(), self.peer, block);
+                            .accept_block(self.command_sender.clone(), self.peer, block);
                         return Status::ok();
                     }
                     ReconstructionResult::Missing(transactions, uncles) => {
@@ -167,7 +166,11 @@ impl<'a> BlockTransactionsProcess<'a> {
                     .build();
                 let message = packed::RelayMessage::new_builder().set(content).build();
 
-                attempt!(send_message_to(self.nc.as_ref(), self.peer, &message));
+                attempt!(send_protocol_message_with_command_sender(
+                    &self.command_sender,
+                    self.peer,
+                    &message
+                ));
 
                 let _ignore_prev_value =
                     mem::replace(expected_transaction_indexes, missing_transactions);

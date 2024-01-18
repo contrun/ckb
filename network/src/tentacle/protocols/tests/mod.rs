@@ -7,8 +7,9 @@ use super::{
 };
 
 use crate::{
-    network::EventHandler, services::protocol_type_checker::ProtocolTypeCheckerService,
-    NetworkState, PeerIdentifyInfo, SupportProtocols,
+    network::TentacleEventHandler, peer::PeerType,
+    services::protocol_type_checker::ProtocolTypeCheckerService, NetworkState, PeerIdentifyInfo,
+    PeerIndex, SupportProtocols,
 };
 
 use std::{
@@ -64,6 +65,10 @@ impl Node {
             .read()
             .peers()
             .keys()
+            .filter_map(|p| match p {
+                PeerIndex::Tentacle(s) => Some(s),
+                PeerIndex::Libp2p(_) => None,
+            })
             .cloned()
             .collect()
     }
@@ -73,7 +78,7 @@ impl Node {
             .peer_registry
             .read()
             .peers()
-            .get(&id)
+            .get(&id.into())
             .map(|peer| peer.protocols.keys().cloned().collect())
             .unwrap_or_default()
     }
@@ -83,7 +88,7 @@ impl Node {
             .peer_registry
             .read()
             .peers()
-            .get(&id)
+            .get(&id.into())
             .map(|peer| peer.identify_info.clone())
             .unwrap_or_default()
     }
@@ -221,7 +226,7 @@ fn net_service_start(
         .key_pair(network_state.local_private_key().clone())
         .upnp(config.upnp)
         .forever(true)
-        .build(EventHandler {
+        .build(TentacleEventHandler {
             network_state: Arc::clone(&network_state),
         });
 
@@ -486,7 +491,7 @@ fn test_discovery_behavior() {
         let mut locked = node3.network_state.peer_store.lock();
 
         locked
-            .fetch_addrs_to_feeler(6)
+            .fetch_addrs_to_feeler(6, PeerType::Tentacle)
             .into_iter()
             .map(|peer| peer.addr)
             .flat_map(|addr| {

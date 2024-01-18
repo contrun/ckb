@@ -8,7 +8,10 @@
 /// 2. feeler: only open feeler protocol is open.
 ///
 /// Other protocols will be closed after a timeout.
-use crate::{network::disconnect_with_message, NetworkState, Peer, ProtocolId, SupportProtocols};
+use crate::{
+    network::tentacle_disconnect_with_message, NetworkState, Peer, PeerIndex, ProtocolId,
+    SupportProtocols,
+};
 use ckb_logger::debug;
 use futures::Future;
 use p2p::service::ServiceControl;
@@ -93,12 +96,17 @@ impl ProtocolTypeCheckerService {
                         "close peer {:?} due to open protocols error: {}",
                         peer.connected_addr, err
                     );
-                    if let Err(err) = disconnect_with_message(
-                        &self.p2p_control,
-                        *session_id,
-                        &format!("open protocols error: {err}"),
-                    ) {
-                        debug!("Disconnect failed {session_id:?}, error: {err:?}");
+                    match peer.index {
+                        PeerIndex::Tentacle(s) => {
+                            if let Err(err) = tentacle_disconnect_with_message(
+                                &self.p2p_control,
+                                s,
+                                &format!("open protocols error: {err}"),
+                            ) {
+                                debug!("Disconnect failed {session_id:?}, error: {err:?}");
+                            }
+                        }
+                        PeerIndex::Libp2p(_) => {}
                     }
                 }
             }

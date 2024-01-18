@@ -3,7 +3,10 @@ use ckb_jsonrpc_types::{
     BannedAddr, LocalNode, LocalNodeProtocol, NodeAddress, PeerSyncState, RemoteNode,
     RemoteNodeProtocol, SyncState, Timestamp,
 };
-use ckb_network::{extract_peer_id, multiaddr::Multiaddr, NetworkController};
+use ckb_network::{
+    extract_peer_id, multiaddr::Multiaddr, NetworkController, PeerId, TentacleMultiaddr,
+    TentaclePeerId,
+};
 use ckb_sync::SyncShared;
 use ckb_systemtime::unix_time_as_millis;
 use jsonrpc_core::Result;
@@ -529,6 +532,60 @@ pub trait NetRpc {
     /// ```
     #[rpc(name = "ping_peers")]
     fn ping_peers(&self) -> Result<()>;
+
+    /// Dial a libp2p peer.
+    ///
+    /// ## Examples
+    ///
+    /// Requests
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "method": "dial_libp2p_peer",
+    ///   "params": ["/ip4/127.0.0.1/tcp/12345/p2p/12D3KooWFqy3UUUYE5YYY4xaWnHpLaBzGa6KCvmWeTD2rvgXM4NV"]
+    /// }
+    /// ```
+    ///
+    /// Response
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "result": null
+    /// }
+    /// ```
+    #[rpc(name = "dial_libp2p_peer")]
+    fn dial_libp2p_peer(&self, addr: String) -> Result<()>;
+
+    /// Disconnect a libp2p peer.
+    ///
+    /// ## Examples
+    ///
+    /// Requests
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "method": "dial_libp2p_peer",
+    ///   "params": ["12D3KooWFqy3UUUYE5YYY4xaWnHpLaBzGa6KCvmWeTD2rvgXM4NV", "Good bye"]
+    /// }
+    /// ```
+    ///
+    /// Response
+    ///
+    /// ```json
+    /// {
+    ///   "id": 42,
+    ///   "jsonrpc": "2.0",
+    ///   "result": null
+    /// }
+    /// ```
+    #[rpc(name = "disconnect_libp2p_peer")]
+    fn dial_disconnect_peer(&self, peer: String, message: String) -> Result<()>;
 }
 
 pub(crate) struct NetRpcImpl {
@@ -584,7 +641,7 @@ impl NetRpc for NetRpcImpl {
                             .unwrap_or(1);
                         let non_negative_score = if score > 0 { score as u64 } else { 0 };
                         NodeAddress {
-                            address: addr.to_string(),
+                            address: format!("{:?}", addr),
                             score: non_negative_score.into(),
                         }
                     })
@@ -598,8 +655,8 @@ impl NetRpc for NetRpcImpl {
                         .as_ref()
                         .map(|info| info.client_version.clone())
                         .unwrap_or_else(|| "unknown".to_string()),
-                    node_id: extract_peer_id(&peer.connected_addr)
-                        .map(|peer_id| peer_id.to_base58())
+                    node_id: PeerId::try_from(&peer.connected_addr)
+                        .map(|peer_id| TentaclePeerId::from(peer_id).to_base58())
                         .unwrap_or_default(),
                     addresses: node_addresses,
                     connected_duration: (std::time::Instant::now()
@@ -696,7 +753,7 @@ impl NetRpc for NetRpcImpl {
                             .value()
                 };
                 self.network_controller
-                    .ban(ip_network, ban_until, reason.unwrap_or_default());
+                    .ban(ip_network, ban_until, &reason.unwrap_or_default());
                 Ok(())
             }
             "delete" => {
@@ -737,23 +794,39 @@ impl NetRpc for NetRpcImpl {
     fn add_node(&self, peer_id: String, address: String) -> Result<()> {
         if let Ok(multiaddr) = address.parse::<Multiaddr>() {
             if extract_peer_id(&multiaddr).is_some() {
-                self.network_controller.add_node(multiaddr)
-            } else if let Ok(addr) = format!("{address}/p2p/{peer_id}").parse() {
-                self.network_controller.add_node(addr)
+                self.network_controller.add_node(multiaddr.into())
+            } else if let Ok(addr) = format!("{address}/p2p/{peer_id}").parse::<TentacleMultiaddr>()
+            {
+                self.network_controller.add_node(addr.into())
             }
         }
         Ok(())
     }
 
     fn remove_node(&self, peer_id: String) -> Result<()> {
-        if let Ok(id) = peer_id.parse() {
-            self.network_controller.remove_node(&id)
+        if let Ok(id) = peer_id.parse::<TentaclePeerId>() {
+            self.network_controller.remove_node(&id.into())
         }
         Ok(())
     }
 
     fn ping_peers(&self) -> Result<()> {
         self.network_controller.ping_peers();
+        Ok(())
+    }
+
+    fn dial_libp2p_peer(&self, addr: String) -> Result<()> {
+        if let Ok(multiaddr) = addr.parse() {
+            self.network_controller.dial_libp2p_peer(multiaddr)
+        }
+        Ok(())
+    }
+
+    fn dial_disconnect_peer(&self, peer: String, message: String) -> Result<()> {
+        if let Ok(peer) = peer.parse() {
+            self.network_controller
+                .disconnect_libp2p_peer(peer, message)
+        }
         Ok(())
     }
 }

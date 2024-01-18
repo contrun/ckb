@@ -3,7 +3,6 @@ use crate::peer_store::types::{ip_to_network, BannedAddr};
 use crate::peer_store::Multiaddr;
 use ckb_systemtime::unix_time_as_millis;
 use ipnetwork::IpNetwork;
-use p2p::utils::multiaddr_to_socketaddr;
 use std::collections::HashMap;
 use std::net::IpAddr;
 
@@ -66,8 +65,8 @@ impl BanList {
 
     /// Whether the address is banned
     pub fn is_addr_banned(&self, addr: &Multiaddr) -> bool {
-        multiaddr_to_socketaddr(addr)
-            .map(|socket_addr| self.is_ip_banned(&socket_addr.ip()))
+        IpAddr::try_from(addr)
+            .map(|ip| self.is_ip_banned(&ip))
             .unwrap_or_default()
     }
 

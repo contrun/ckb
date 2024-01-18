@@ -1,6 +1,6 @@
 use crate::block_status::BlockStatus;
 use crate::orphan_block_pool::OrphanBlockPool;
-use crate::utils::is_internal_db_error;
+use crate::utils::{is_internal_db_error, send_message_with_command_sender};
 use crate::{Status, StatusCode, FAST_INDEX, LOW_INDEX, NORMAL_INDEX, TIME_TRACE_SIZE};
 use ckb_app_config::SyncConfig;
 use ckb_chain::chain::ChainController;
@@ -15,7 +15,7 @@ use ckb_constant::sync::{
 };
 use ckb_error::Error as CKBError;
 use ckb_logger::{debug, error, trace};
-use ckb_network::{CKBProtocolContext, PeerIndex, SupportProtocols};
+use ckb_network::{CommandSender, PeerIndex, SupportProtocols};
 use ckb_shared::{shared::Shared, Snapshot};
 use ckb_store::{ChainDB, ChainStore};
 use ckb_systemtime::unix_time_as_millis;
@@ -42,7 +42,6 @@ use std::{cmp, fmt, iter};
 
 mod header_map;
 
-use crate::utils::send_message;
 use ckb_types::core::{EpochNumber, EpochNumberWithFraction};
 pub use header_map::HeaderMap;
 
@@ -795,10 +794,7 @@ impl InflightBlocks {
                 .insert(block.clone(), unix_time_as_millis());
         }
 
-        let download_scheduler = self
-            .download_schedulers
-            .entry(peer)
-            .or_insert_with(DownloadScheduler::default);
+        let download_scheduler = self.download_schedulers.entry(peer).or_default();
         download_scheduler.hashes.insert(block)
     }
 
@@ -864,6 +860,7 @@ impl Peers {
         is_whitelist: bool,
         is_2023edition: bool,
     ) {
+        dbg!(&peer, is_outbound, is_whitelist, is_2023edition);
         let protect_outbound = is_outbound
             && self
                 .n_protected_outbound_peers
@@ -2286,7 +2283,7 @@ impl ActiveChain {
 
     pub fn send_getheaders_to_peer(
         &self,
-        nc: &dyn CKBProtocolContext,
+        command_sender: &CommandSender,
         peer: PeerIndex,
         block_number_and_hash: BlockNumberAndHash,
     ) {
@@ -2325,7 +2322,12 @@ impl ActiveChain {
             .hash_stop(packed::Byte32::zero())
             .build();
         let message = packed::SyncMessage::new_builder().set(content).build();
-        let _status = send_message(SupportProtocols::Sync.protocol_id(), nc, peer, &message);
+        let _status = send_message_with_command_sender(
+            command_sender,
+            SupportProtocols::Sync,
+            peer,
+            &message,
+        );
     }
 
     pub fn get_block_status(&self, block_hash: &Byte32) -> BlockStatus {
