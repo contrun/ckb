@@ -92,8 +92,6 @@ pub fn store_block(shared: &Shared, block: Arc<BlockView>) -> Result<(HeaderView
 
     db_txn.commit()?;
 
-    shared.insert_block_status(block.hash(), BlockStatus::BLOCK_STORED);
-
     Ok((parent_header, cannon_total_difficulty))
 }
 
