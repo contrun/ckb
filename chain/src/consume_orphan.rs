@@ -1,12 +1,12 @@
 use crate::utils::orphan_block_pool::OrphanBlockPool;
 use crate::{
-    tell_synchronizer_to_punish_the_bad_peer, LonelyBlockHashWithCallback, LonelyBlockWithCallback,
-    VerifyResult,
+    tell_synchronizer_to_punish_the_bad_peer, LonelyBlock, LonelyBlockHashWithCallback,
+    LonelyBlockWithCallback, VerifyResult,
 };
 use ckb_channel::{select, Receiver, SendError, Sender};
 use ckb_error::{Error, InternalErrorKind};
 use ckb_logger::internal::trace;
-use ckb_logger::{debug, error, info};
+use ckb_logger::{debug, error, info, log_enabled_target};
 use ckb_shared::block_status::BlockStatus;
 use ckb_shared::types::VerifyFailedBlockInfo;
 use ckb_shared::Shared;
@@ -305,7 +305,48 @@ impl ConsumeOrphan {
                 lonely_block.block().number(),
                 lonely_block.block().hash()
             );
-            self.descendant_processor.process_descendant(lonely_block);
+            let parents_to_process = vec![];
+            if parent_status.contains(BlockStatus::BLOCK_VALID) {
+                self.descendant_processor.process_descendant(lonely_block);
+            } else {
+                let new_lonely_parent_block =
+                    |parent_block: &BlockView| -> LonelyBlockWithCallback {
+                        LonelyBlockWithCallback {
+                            lonely_block: LonelyBlock {
+                                block: Arc::new(parent_block.to_owned()),
+                                peer_id_with_msg_bytes: None,
+                                switch: lonely_block.lonely_block.switch.clone(),
+                            },
+                            verify_callback: None,
+                        }
+                    };
+                let mut parent_hash = parent_hash.to_owned();
+                let parent_block = self
+                    .shared
+                    .store()
+                    .get_block(&parent_hash)
+                    .expect("parent block must be stored");
+                let parent_lonely_block = new_lonely_parent_block(&parent_block);
+                let mut parents_to_process = vec![parent_lonely_block];
+                loop {
+                    let parent_status = self
+                        .shared
+                        .get_block_status(self.shared.store(), &parent_hash);
+
+                    if parent_status.contains(BlockStatus::BLOCK_INVALID) {
+                        panic!(
+                            "lonely block {}-{} has invalid parent {}-{:?}",
+                            lonely_block.block().number(),
+                            lonely_block.block().hash(),
+                            parent_hash,
+                            parent_status
+                        );
+                    }
+                    parent_hash = parent.block().parent_hash().to_owned();
+                    parents_to_process.push(parent);
+                }
+                self.descendant_processor.process_descendant(lonely_block);
+            }
         } else {
             self.orphan_blocks_broker.insert(lonely_block);
         }

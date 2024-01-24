@@ -176,3 +176,26 @@ fn test_remove_expired_blocks() {
     assert_eq!(v.len(), 19);
     assert_eq!(pool.leaders_len(), 0);
 }
+
+#[test]
+fn test_process_orphan_with_unverified_parent() {
+    let consensus = ConsensusBuilder::default().build();
+    let block_number = 200;
+    let mut blocks = Vec::new();
+    let mut parent = consensus.genesis_block().header();
+    let pool = OrphanBlockPool::with_capacity(200);
+    for _ in 1..block_number {
+        let lonely_block = gen_lonely_block(&parent);
+        let new_block_clone = lonely_block.clone().without_callback();
+        let new_block = lonely_block.without_callback();
+        blocks.push(new_block_clone);
+
+        parent = new_block.block().header();
+        pool.insert(new_block);
+    }
+
+    let orphan = pool.remove_blocks_by_parent(&consensus.genesis_block().hash());
+    let orphan_set: HashSet<_> = orphan.into_iter().map(|b| b.lonely_block.block).collect();
+    let blocks_set: HashSet<_> = blocks.into_iter().map(|b| b.lonely_block.block).collect();
+    assert_eq!(orphan_set, blocks_set)
+}

@@ -162,6 +162,13 @@ impl OrphanBlockPool {
         self.inner.write().remove_blocks_by_parent(parent_hash)
     }
 
+    pub fn get_unverified_parent_of_block(
+        &self,
+        block: &ParentHash,
+    ) -> Vec<LonelyBlockWithCallback> {
+        vec![]
+    }
+
     pub fn get_block(&self, hash: &packed::Byte32) -> Option<Arc<BlockView>> {
         self.inner.read().get_block(hash)
     }
