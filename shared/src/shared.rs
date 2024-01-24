@@ -426,9 +426,11 @@ impl Shared {
                 if self.header_map().contains_key(block_hash) {
                     BlockStatus::HEADER_VALID
                 } else {
-                    let verified = store
-                        .get_block_ext(block_hash)
-                        .map(|block_ext| block_ext.verified);
+                    dbg!(block_hash);
+                    let block_ext = store.get_block_ext(block_hash);
+                    dbg!(&block_ext);
+                    let verified = block_ext.map(|block_ext| block_ext.verified);
+                    dbg!(&verified);
                     match verified {
                         None => BlockStatus::UNKNOWN,
                         Some(None) => BlockStatus::BLOCK_STORED,

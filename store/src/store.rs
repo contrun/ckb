@@ -245,8 +245,10 @@ pub trait ChainStore: Send + Sync + Sized {
     ///
     /// Since v0.106, `BlockExt` added two option fields, so we have to use compatibility mode to read
     fn get_block_ext(&self, block_hash: &packed::Byte32) -> Option<BlockExt> {
+        dbg!(block_hash, block_hash.as_slice());
         self.get(COLUMN_BLOCK_EXT, block_hash.as_slice())
             .map(|slice| {
+                dbg!(block_hash, &slice);
                 let reader =
                     packed::BlockExtReader::from_compatible_slice_should_be_ok(slice.as_ref());
                 match reader.count_extra_fields() {

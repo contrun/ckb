@@ -33,9 +33,11 @@ pub fn generate_blocks(
     let snapshot = shared.snapshot();
     let parent_number = snapshot.tip_number();
     let mut parent_hash = snapshot.tip_header().hash();
+    dbg!(parent_number, &parent_hash);
     for _ in parent_number..target_tip {
         let block = inherit_block(shared, &parent_hash).build();
         parent_hash = block.header().hash();
+        dbg!(&parent_hash);
         chain_controller
             .blocking_process_block_with_switch(Arc::new(block), Switch::DISABLE_ALL)
             .expect("processing block should be ok");
