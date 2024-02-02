@@ -69,3 +69,6 @@ lcov-integration-test.info
 node1/
 node2/
 \[1
+
+/.direnv/
+/node*
