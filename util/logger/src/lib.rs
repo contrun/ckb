@@ -144,6 +144,27 @@ macro_rules! error {
     }
 }
 
+
+/// Panic if async_test feature is enabled, otherwise logs a message at the error level using the default target.
+/// This is useful to build binaries for debugging.
+/// ```
+/// use ckb_logger::panic_or_error;
+///
+/// let (err_info, port) = ("No connection", 22);
+///
+/// panic_or_error!("Error: {} on port {}", err_info, port);
+/// ```
+#[macro_export(local_inner_macros)]
+macro_rules! panic_or_error {
+    ($( $args:tt )*) => {
+        if std::cfg!(feature = "async_test") {
+            std::panic!($( $args )*);
+        } else {
+            $crate::internal::error!($( $args )*);
+        }
+    }
+}
+
 /// Determines if a message logged at the specified level and with the default target will be logged.
 ///
 /// The default target is the module path of the location of the log request.

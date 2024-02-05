@@ -6,7 +6,7 @@
 //! [`ChainService`]: chain/struct.ChainService.html
 //! [`ChainController`]: chain/struct.ChainController.html
 use ckb_error::{is_internal_db_error, Error};
-use ckb_logger::{debug, error};
+use ckb_logger::{debug, panic_or_error};
 use ckb_network::PeerIndex;
 use ckb_shared::types::{BlockNumberAndHash, VerifyFailedBlockInfo};
 use ckb_types::core::service::Request;
@@ -181,7 +181,7 @@ pub(crate) fn tell_synchronizer_to_punish_the_bad_peer(
                 is_internal_db_error,
             };
             if let Err(_err) = verify_failed_blocks_tx.send(verify_failed_block_info) {
-                error!("ChainService failed to send verify failed block info to Synchronizer, the receiver side may have been closed, this shouldn't happen")
+                panic_or_error!("ChainService failed to send verify failed block info to Synchronizer, the receiver side may have been closed, this shouldn't happen")
             }
         }
         _ => {

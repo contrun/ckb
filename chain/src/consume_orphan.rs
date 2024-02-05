@@ -3,7 +3,7 @@ use crate::{tell_synchronizer_to_punish_the_bad_peer, LonelyBlock, LonelyBlockHa
 use ckb_channel::{select, Receiver, SendError, Sender};
 use ckb_error::{Error, InternalErrorKind};
 use ckb_logger::internal::trace;
-use ckb_logger::{debug, error, info};
+use ckb_logger::{debug, error, info, panic_or_error};
 use ckb_shared::block_status::BlockStatus;
 use ckb_shared::types::VerifyFailedBlockInfo;
 use ckb_shared::Shared;
@@ -281,11 +281,10 @@ impl ConsumeOrphan {
                 .orphan_blocks_broker
                 .remove_blocks_by_parent(&leader_hash);
             if descendants.is_empty() {
-                error!(
+                panic!(
                     "leader {} does not have any descendants, this shouldn't happen",
                     leader_hash
                 );
-                continue;
             }
             self.descendant_processor.accept_descendants(descendants);
         }

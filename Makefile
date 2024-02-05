@@ -134,6 +134,14 @@ profiling: ## Build binary with for profiling without debug symbols.
 build-for-profiling: ## Build binary with for profiling.
 	devtools/release/make-with-debug-symbols profiling
 
+.PHONY: async-test
+async-test: ## Build binary with for async test without debug symbols.
+	JEMALLOC_SYS_WITH_MALLOC_CONF="prof:true" cargo build ${VERBOSE} --profile prod --features "async_test,with_sentry,with_dns_seeding,profiling"
+
+.PHONY: async-test-with-debug-symbols
+async-test-with-debug-symbols: ## Build binary with for async test.
+	devtools/release/make-with-debug-symbols async-test
+
 .PHONY: prod
 prod: ## Build binary for production release.
 	cargo build ${VERBOSE} ${CKB_BUILD_TARGET} --profile prod --features "with_sentry,with_dns_seeding"

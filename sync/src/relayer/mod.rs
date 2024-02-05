@@ -330,11 +330,9 @@ impl Relayer {
                         return;
                     }
 
-                    if broadcast_compact_block_tx.send((block, peer_id)).is_err() {
-                        error!(
-                        "send block to broadcast_compact_block_tx failed, this shouldn't happen",
-                    );
-                    }
+                    broadcast_compact_block_tx
+                        .send((block, peer_id))
+                        .expect("send block to broadcast_compact_block_tx failed");
                 }
                 Err(err) => {
                     error!(

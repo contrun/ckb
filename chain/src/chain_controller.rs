@@ -7,7 +7,7 @@ use crate::{
 };
 use ckb_channel::Sender;
 use ckb_error::{Error, InternalErrorKind};
-use ckb_logger::{self, error};
+use ckb_logger::error;
 use ckb_network::PeerIndex;
 use ckb_types::{
     core::{service::Request, BlockView},
@@ -92,7 +92,7 @@ impl ChainController {
         let verify_callback = {
             move |result: VerifyResult| {
                 if let Err(err) = verify_result_tx.send(result) {
-                    error!(
+                    panic!(
                         "blocking send verify_result failed: {}, this shouldn't happen",
                         err
                     )
