@@ -7,7 +7,7 @@ CLIPPY_OPTS := -D warnings -D clippy::clone_on_ref_ptr -D clippy::enum_glob_use 
 	-A clippy::mutable_key_type -A clippy::upper_case_acronyms
 CKB_TEST_ARGS := -c 4 ${CKB_TEST_ARGS}
 CKB_FEATURES ?= deadlock_detection,with_sentry
-ALL_FEATURES := deadlock_detection,with_sentry,with_dns_seeding,profiling,march-native
+ALL_FEATURES := deadlock_detection,with_sentry,with_dns_seeding,profiling,march-native,with_pyroscope
 CKB_BENCH_FEATURES ?= ci
 CKB_BUILD_TARGET ?=
 INTEGRATION_RUST_LOG := info,ckb_test=debug,ckb_sync=debug,ckb_relay=debug,ckb_network=debug

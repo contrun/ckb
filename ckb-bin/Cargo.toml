@@ -44,6 +44,8 @@ rayon = "1.0"
 sentry = { version = "0.26.0", optional = true }
 is-terminal = "0.4.7"
 fdlimit = "0.2.1"
+pyroscope = { version = "0.5.3", optional = true }
+pyroscope_pprofrs = { version = "0.2", optional = true }
 ckb-stop-handler = { path = "../util/stop-handler", version = "= 0.113.1" }
 
 [features]
@@ -51,5 +53,6 @@ deadlock_detection = ["ckb-util/deadlock_detection"]
 profiling = ["ckb-memory-tracker/profiling"]
 with_sentry = ["sentry", "ckb-launcher/with_sentry", "ckb-network/with_sentry", "ckb-app-config/with_sentry", "ckb-logger-service/with_sentry"]
 with_dns_seeding = ["ckb-network/with_dns_seeding"]
+with_pyroscope = ["pyroscope", "pyroscope_pprofrs"]
 portable = ["ckb-launcher/portable"]
 march-native = ["ckb-launcher/march-native"]
