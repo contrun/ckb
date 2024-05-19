@@ -2,8 +2,7 @@
 use crate::ChainServicesBuilder;
 use crate::{HeaderMap, Shared};
 use ckb_app_config::{
-    BlockAssemblerConfig, DBConfig, ExitCode, HeaderMapConfig, NotifyConfig, StoreConfig,
-    SyncConfig, TxPoolConfig,
+    BlockAssemblerConfig, DBConfig, ExitCode, NotifyConfig, StoreConfig, SyncConfig, TxPoolConfig,
 };
 use ckb_async_runtime::{new_background_runtime, Handle};
 use ckb_chain_spec::consensus::Consensus;
@@ -48,7 +47,6 @@ pub struct SharedBuilder {
     notify_config: Option<NotifyConfig>,
     async_handle: Handle,
 
-    header_map_memory_limit: Option<usize>,
     header_map_tmp_dir: Option<PathBuf>,
 }
 
@@ -154,7 +152,6 @@ impl SharedBuilder {
             sync_config: None,
             block_assembler_config: None,
             async_handle,
-            header_map_memory_limit: None,
             header_map_tmp_dir: None,
         })
     }
@@ -203,7 +200,6 @@ impl SharedBuilder {
             block_assembler_config: None,
             async_handle: runtime.get_or_init(new_background_runtime).clone(),
 
-            header_map_memory_limit: None,
             header_map_tmp_dir: None,
         })
     }
@@ -353,12 +349,16 @@ impl SharedBuilder {
             block_assembler_config,
             notify_config,
             async_handle,
-            header_map_memory_limit,
             header_map_tmp_dir,
         } = self;
 
-        let header_map_memory_limit = header_map_memory_limit
-            .unwrap_or(HeaderMapConfig::default().memory_limit.as_u64() as usize);
+        let tx_pool_config = tx_pool_config.unwrap_or_default();
+        let notify_config = notify_config.unwrap_or_default();
+        let store_config = store_config.unwrap_or_default();
+        let sync_config = sync_config.unwrap_or_default();
+        let consensus = Arc::new(consensus);
+
+        let header_map_memory_limit = sync_config.header_map.memory_limit.as_u64() as usize;
 
         let ibd_finished = Arc::new(AtomicBool::new(false));
 
@@ -368,12 +368,6 @@ impl SharedBuilder {
             &async_handle.clone(),
             Arc::clone(&ibd_finished),
         ));
-
-        let tx_pool_config = tx_pool_config.unwrap_or_default();
-        let notify_config = notify_config.unwrap_or_default();
-        let store_config = store_config.unwrap_or_default();
-        let sync_config = sync_config.unwrap_or_default();
-        let consensus = Arc::new(consensus);
 
         let notify_controller = start_notify_service(notify_config, async_handle.clone());
 
