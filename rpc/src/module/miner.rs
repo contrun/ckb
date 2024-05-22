@@ -5,6 +5,7 @@ use ckb_jsonrpc_types::{Block, BlockTemplate, Uint64, Version};
 use ckb_logger::{debug, error, info, warn};
 use ckb_network::{NetworkController, PeerIndex, SupportProtocols, TargetSession};
 use ckb_shared::{shared::Shared, Snapshot};
+use ckb_store::ChainStore;
 use ckb_systemtime::unix_time_as_millis;
 use ckb_types::{core, packed, prelude::*, H256};
 use ckb_verification::HeaderVerifier;
@@ -274,6 +275,21 @@ impl MinerRpc for MinerRpcImpl {
         HeaderVerifier::new(snapshot, consensus)
             .verify(&header)
             .map_err(|err| handle_submit_error(&work_id, &err))?;
+        if self
+            .shared
+            .snapshot()
+            .get_block_header(&block.parent_hash())
+            .is_none()
+        {
+            let err = format!(
+                "Block parent {} of {}-{} not found",
+                block.parent_hash(),
+                block.number(),
+                block.hash()
+            );
+
+            return Err(handle_submit_error(&work_id, &err));
+        }
 
         // Verify and insert block
         let is_new = self
