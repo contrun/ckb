@@ -10,7 +10,7 @@ fn script_occupied_capacity() {
         (vec![0, 0], 2 + 32 + 1),
     ];
     for (args, ckb) in testcases.into_iter() {
-        let script = packed::Script::new_builder().args(args.pack()).build();
+        let script = packed::Script::new_builder().args(args).build();
         let expect = Capacity::bytes(ckb).unwrap();
         assert_eq!(script.occupied_capacity().unwrap(), expect);
     }

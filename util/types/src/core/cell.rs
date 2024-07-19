@@ -339,7 +339,7 @@ impl ResolvedTransaction {
             for cell_meta in &self.resolved_dep_groups {
                 let cell_dep = CellDep::new_builder()
                     .out_point(cell_meta.out_point.clone())
-                    .dep_type(DepType::DepGroup.into())
+                    .dep_type(DepType::DepGroup)
                     .build();
 
                 let dep_group = system_cell.get(&cell_dep);
@@ -353,7 +353,7 @@ impl ResolvedTransaction {
             for cell_meta in &self.resolved_cell_deps {
                 let cell_dep = CellDep::new_builder()
                     .out_point(cell_meta.out_point.clone())
-                    .dep_type(DepType::Code.into())
+                    .dep_type(DepType::Code)
                     .build();
 
                 if system_cell.get(&cell_dep).is_none()
@@ -853,27 +853,27 @@ pub fn setup_system_cell_cache<CP: CellProvider>(
     let secp_cell_transaction = &genesis.transactions()[1];
     let secp_code_dep = CellDep::new_builder()
         .out_point(OutPoint::new(system_cell_transaction.hash(), 1))
-        .dep_type(DepType::Code.into())
+        .dep_type(DepType::Code)
         .build();
 
     let dao_dep = CellDep::new_builder()
         .out_point(OutPoint::new(system_cell_transaction.hash(), 2))
-        .dep_type(DepType::Code.into())
+        .dep_type(DepType::Code)
         .build();
 
     let secp_data_dep = CellDep::new_builder()
         .out_point(OutPoint::new(system_cell_transaction.hash(), 3))
-        .dep_type(DepType::Code.into())
+        .dep_type(DepType::Code)
         .build();
 
     let secp_group_dep = CellDep::new_builder()
         .out_point(OutPoint::new(secp_cell_transaction.hash(), 0))
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let multi_sign_secp_group = CellDep::new_builder()
         .out_point(OutPoint::new(secp_cell_transaction.hash(), 1))
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let mut cell_deps = HashMap::new();

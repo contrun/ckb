@@ -86,7 +86,7 @@ impl BuildCompactBlock for packed::CompactBlock {
                 || transaction.is_cellbase()
             {
                 let prefilled_tx = packed::IndexTransaction::new_builder()
-                    .index((transaction_index as u32).pack())
+                    .index(transaction_index)
                     .transaction(transaction.data())
                     .build();
                 prefilled_transactions.push(prefilled_tx);

@@ -31,10 +31,10 @@ fn check_data() {
     for ht in 0..4 {
         if ht != 3 {
             for dt in 0..2 {
-                let ht_right = ht.into();
-                let dt_right = dt.into();
-                let ht_error = 3.into();
-                let dt_error = 2.into();
+                let ht_right = ht;
+                let dt_right = dt;
+                let ht_error = 3;
+                let dt_error = 2;
 
                 let script_right = packed::Script::new_builder().hash_type(ht_right).build();
                 let script_error = packed::Script::new_builder().hash_type(ht_error).build();

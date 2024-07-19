@@ -82,37 +82,37 @@ fn test_bytesopt_cmp() {
 
 #[test]
 fn test_script_cmp() {
-    let a = Script::new_builder().args([1].pack()).build();
-    let b = Script::new_builder().args([2].pack()).build();
+    let a = Script::new_builder().args([1]).build();
+    let b = Script::new_builder().args([2]).build();
 
     assert!(a < b);
 }
 
 #[test]
 fn test_celldep_cmp() {
-    let a = CellDep::new_builder().dep_type(1.into()).build();
-    let b = CellDep::new_builder().dep_type(2.into()).build();
+    let a = CellDep::new_builder().dep_type(1).build();
+    let b = CellDep::new_builder().dep_type(2).build();
     assert!(a < b);
 }
 
 #[test]
 fn test_outpoint_cmp() {
-    let a = OutPoint::new_builder().index(1u32.pack()).build();
-    let b = OutPoint::new_builder().index(2u32.pack()).build();
+    let a = OutPoint::new_builder().index(1u32).build();
+    let b = OutPoint::new_builder().index(2u32).build();
     assert!(a < b);
 }
 
 #[test]
 fn test_cellinput_cmp() {
-    let a = CellInput::new_builder().since(1000u64.pack()).build();
-    let b = CellInput::new_builder().since(2000u64.pack()).build();
+    let a = CellInput::new_builder().since(1000u64).build();
+    let b = CellInput::new_builder().since(2000u64).build();
     assert!(a > b);
 }
 
 #[test]
 fn test_celloutput_cmp() {
-    let script_lock = Script::new_builder().hash_type(1.into()).build();
-    let script_type = Script::new_builder().hash_type(2.into()).build();
+    let script_lock = Script::new_builder().hash_type(1).build();
+    let script_type = Script::new_builder().hash_type(2).build();
     let script_type_opt = ScriptOpt::new_builder().set(Some(script_type)).build();
     let output_a = CellOutput::new_builder().lock(script_lock.clone()).build();
     let output_b = CellOutput::new_builder()

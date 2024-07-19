@@ -21,12 +21,12 @@ fn test_block_view_convert_from_packed_block() {
 fn test_extension_field_in_block_view() {
     let block = {
         let uncle1 = packed::Block::new_advanced_builder()
-            .number(1u64.pack())
+            .number(1u64)
             .epoch(EpochNumberWithFraction::new(0, 1, 1000).pack())
             .build()
             .as_uncle();
         let uncle2 = packed::Block::new_advanced_builder()
-            .number(2u64.pack())
+            .number(2u64)
             .epoch(EpochNumberWithFraction::new(0, 2, 1000).pack())
             .build()
             .as_uncle();

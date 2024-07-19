@@ -21,11 +21,11 @@ fn empty_proposals_hash() {
 #[test]
 fn uncles_hash() {
     let uncle1_raw_header = packed::RawHeader::new_builder()
-        .version(0u32.pack())
-        .compact_target(0x1e08_3126u32.pack())
-        .timestamp(0x5cd2_b117u64.pack())
-        .number(0x400u64.pack())
-        .epoch(0x0007_0800_1800_0001u64.pack())
+        .version(0u32)
+        .compact_target(0x1e08_3126u32)
+        .timestamp(0x5cd2_b117u64)
+        .number(0x400u64)
+        .epoch(0x0007_0800_1800_0001u64)
         .parent_hash(
             h256!("0x8381df265c9442d5c27559b167892c5a6a8322871112d3cc8ef45222c6624831").pack(),
         )
@@ -51,11 +51,11 @@ fn uncles_hash() {
         .build();
 
     let uncle2_raw_header = packed::RawHeader::new_builder()
-        .version(0u32.pack())
-        .compact_target(0x2001_0000u32.pack())
-        .timestamp(0x5cd2_1a16u64.pack())
-        .number(0x400u64.pack())
-        .epoch(0x0007_0800_1800_0001u64.pack())
+        .version(0u32)
+        .compact_target(0x2001_0000u32)
+        .timestamp(0x5cd2_1a16u64)
+        .number(0x400u64)
+        .epoch(0x0007_0800_1800_0001u64)
         .parent_hash(
             h256!("0x8381df265c9442d5c27559b167892c5a6a8322871112d3cc8ef45222c6624831").pack(),
         )
@@ -111,7 +111,7 @@ fn always_success_script_hash() {
 
 #[test]
 fn one_arg_script_hash() {
-    let script = packed::Script::new_builder().args([1].pack()).build();
+    let script = packed::Script::new_builder().args([1]).build();
     let expect = h256!("0x67951b34bce20cb71b7e235c1f8cda259628d99d94825bffe549c23b4dd2930f");
     assert_eq!(script.calc_script_hash(), expect.pack());
 }

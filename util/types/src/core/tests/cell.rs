@@ -14,7 +14,7 @@ use crate::{
         TransactionInfo, TransactionView,
     },
     h256,
-    packed::{Byte32, CellDep, CellInput, CellOutput, OutPoint},
+    packed::{self, Byte32, CellDep, CellInput, CellOutput, OutPoint},
     prelude::*,
 };
 
@@ -134,7 +134,7 @@ fn resolve_transaction_should_resolve_dep_group() {
 
     let dep = CellDep::new_builder()
         .out_point(op_dep)
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let transaction = TransactionBuilder::default().cell_dep(dep).build();
@@ -167,7 +167,7 @@ fn resolve_transaction_resolve_dep_group_failed_because_invalid_data() {
 
     let dep = CellDep::new_builder()
         .out_point(op_dep.clone())
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let transaction = TransactionBuilder::default().cell_dep(dep).build();
@@ -196,7 +196,7 @@ fn resolve_transaction_resolve_dep_group_failed_because_unknown_sub_cell() {
 
     let dep = CellDep::new_builder()
         .out_point(op_dep)
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let transaction = TransactionBuilder::default().cell_dep(dep).build();
@@ -277,7 +277,7 @@ fn resolve_transaction_should_reject_incorrect_order_txs() {
                 .capacity(capacity_bytes!(2).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(packed::Bytes::default())
         .build();
 
     let tx2 = TransactionBuilder::default()

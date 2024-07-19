@@ -109,15 +109,21 @@ impl ::std::default::Default for HeaderBuilder {
 macro_rules! def_setter_simple {
     (__add_doc, $prefix:ident, $field:ident, $type:ident, $comment:expr) => {
         #[doc = $comment]
-        pub fn $field(mut self, v: packed::$type) -> Self {
-            self.$prefix.$field = v;
+        pub fn $field<T>(mut self, v: T) -> Self
+        where
+            T: ::core::convert::Into<packed::$type>,
+        {
+            self.$prefix.$field = v.into();
             self
         }
     };
     (__add_doc, $field:ident, $type:ident, $comment:expr) => {
         #[doc = $comment]
-        pub fn $field(mut self, v: packed::$type) -> Self {
-            self.$field = v;
+        pub fn $field<T>(mut self, v: T) -> Self
+        where
+            T: ::core::convert::Into<packed::$type>,
+        {
+            self.$field = v.into();
             self
         }
     };
@@ -147,8 +153,11 @@ macro_rules! def_setter_for_vector {
         $comment_push:expr, $comment_extend:expr, $comment_set:expr,
     ) => {
         #[doc = $comment_push]
-        pub fn $func_push(mut self, v: $prefix::$type) -> Self {
-            self.$field.push(v);
+        pub fn $func_push<T>(mut self, v: T) -> Self
+        where
+            T: ::core::convert::Into<$prefix::$type>,
+        {
+            self.$field.push(v.into());
             self
         }
         #[doc = $comment_extend]
