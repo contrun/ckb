@@ -60,7 +60,7 @@ impl<'a> GetBlockFilterHashesProcess<'a> {
                 }
             }
             let content = packed::BlockFilterHashes::new_builder()
-                .start_number(start_number.pack())
+                .start_number(start_number)
                 .parent_block_filter_hash(parent_block_filter_hash)
                 .block_filter_hashes(block_filter_hashes.pack())
                 .build();

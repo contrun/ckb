@@ -162,7 +162,7 @@ impl MockChain {
         let cellbase = TransactionBuilder::default().build();
         BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
+            .number(parent.number() + 1)
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .transaction(cellbase)
             .build()
@@ -183,7 +183,7 @@ impl MockChain {
 
         BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
+            .number(parent.number() + 1)
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .transaction(cellbase)
             .build()

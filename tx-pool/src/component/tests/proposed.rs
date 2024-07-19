@@ -536,7 +536,7 @@ fn test_dep_group() {
     // Transaction use dep group
     let dep = CellDep::new_builder()
         .out_point(tx2_out_point.clone())
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
     let tx3 = TransactionBuilder::default()
         .cell_dep(dep)
@@ -716,7 +716,7 @@ fn test_container_bench_add_limits() {
                         .previous_output(
                             OutPoint::new_builder()
                                 .tx_hash(prev_tx.transaction().hash())
-                                .index(0u32.pack())
+                                .index(0u32)
                                 .build(),
                         )
                         .build(),
@@ -749,13 +749,13 @@ fn test_pool_map_bench() {
     for i in 0..20000 {
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
@@ -767,7 +767,7 @@ fn test_pool_map_bench() {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let entry = TxEntry::dummy_resolve(

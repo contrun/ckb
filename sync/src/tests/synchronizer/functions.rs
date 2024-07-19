@@ -115,10 +115,10 @@ fn gen_block(
     BlockBuilder::default()
         .transaction(cellbase)
         .parent_hash(parent_header.hash())
-        .timestamp(now.pack())
+        .timestamp(now)
         .epoch(epoch.number_with_fraction(number).pack())
-        .number(number.pack())
-        .compact_target(epoch.compact_target().pack())
+        .number(number)
+        .compact_target(epoch.compact_target())
         .nonce(nonce.pack())
         .dao(dao)
         .extension(Some(bytes))
@@ -759,7 +759,7 @@ fn test_chain_sync_timeout() {
 
     let consensus = Consensus::default();
     let block = BlockBuilder::default()
-        .compact_target(difficulty_to_compact(U256::from(3u64)).pack())
+        .compact_target(difficulty_to_compact(U256::from(3u64)))
         .transaction(consensus.genesis_block().transactions()[0].clone())
         .build();
     let consensus = ConsensusBuilder::default().genesis_block(block).build();
@@ -956,7 +956,7 @@ fn test_n_sync_started() {
 
     let consensus = Consensus::default();
     let block = BlockBuilder::default()
-        .compact_target(difficulty_to_compact(U256::from(3u64)).pack())
+        .compact_target(difficulty_to_compact(U256::from(3u64)))
         .transaction(consensus.genesis_block().transactions()[0].clone())
         .build();
     let consensus = ConsensusBuilder::default().genesis_block(block).build();

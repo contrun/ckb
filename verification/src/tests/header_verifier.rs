@@ -41,7 +41,7 @@ pub fn test_version() {
         .build();
 
     let header = HeaderBuilder::default()
-        .version((consensus.block_version() + 1).pack())
+        .version(consensus.block_version() + 1)
         .build();
     let verifier = VersionVerifier::new(&header, &consensus);
 
@@ -54,7 +54,7 @@ pub fn test_version() {
     );
     let epoch = EpochNumberWithFraction::new(10, 40, 1000);
     let header = HeaderBuilder::default()
-        .version((consensus.block_version() + 1).pack())
+        .version(consensus.block_version() + 1)
         .epoch(epoch.pack())
         .build();
     let verifier = VersionVerifier::new(&header, &consensus);
@@ -70,7 +70,7 @@ fn test_timestamp() {
     let timestamp = unix_time_as_millis() + 1;
     let header = HeaderBuilder::new_with_number(100)
         .parent_hash(parent_hash)
-        .timestamp(timestamp.pack())
+        .timestamp(timestamp)
         .build();
     let timestamp_verifier = TimestampVerifier::new(
         &fake_block_median_time_context,
@@ -92,7 +92,7 @@ fn test_timestamp_too_old() {
     let timestamp = unix_time_as_millis() - 1;
     let header = HeaderBuilder::new_with_number(100)
         .parent_hash(parent_hash)
-        .timestamp(timestamp.pack())
+        .timestamp(timestamp)
         .build();
     let timestamp_verifier = TimestampVerifier::new(
         &fake_block_median_time_context,
@@ -120,7 +120,7 @@ fn test_timestamp_too_new() {
     let timestamp = max + 1;
     let header = HeaderBuilder::new_with_number(100)
         .parent_hash(parent_hash)
-        .timestamp(timestamp.pack())
+        .timestamp(timestamp)
         .build();
     let timestamp_verifier = TimestampVerifier::new(
         &fake_block_median_time_context,

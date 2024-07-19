@@ -15,7 +15,7 @@ fn test_veirifer() {
             .collect(),
     };
     let verifier = Verifier::new(config);
-    let raw_alert = packed::RawAlert::new_builder().id(1u32.pack()).build();
+    let raw_alert = packed::RawAlert::new_builder().id(1u32).build();
     let hash = raw_alert.calc_alert_hash();
     let signatures = keypairs
         .iter()

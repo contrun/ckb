@@ -84,8 +84,8 @@ fn setup_node(height: u64) -> (TestNode, Shared) {
     let dao = genesis_dao_data(vec![&always_success_tx]).unwrap();
 
     let mut block = BlockBuilder::default()
-        .timestamp(unix_time_as_millis().pack())
-        .compact_target(difficulty_to_compact(U256::from(1000u64)).pack())
+        .timestamp(unix_time_as_millis())
+        .compact_target(difficulty_to_compact(U256::from(1000u64)))
         .dao(dao)
         .transaction(always_success_tx)
         .build();
@@ -158,10 +158,10 @@ fn setup_node(height: u64) -> (TestNode, Shared) {
         block = BlockBuilder::default()
             .transaction(cellbase)
             .parent_hash(block.header().hash())
-            .number(number.pack())
+            .number(number)
             .epoch(epoch.number_with_fraction(number).pack())
-            .timestamp(timestamp.pack())
-            .compact_target(epoch.compact_target().pack())
+            .timestamp(timestamp)
+            .compact_target(epoch.compact_target())
             .dao(dao)
             .extension(Some(bytes))
             .build();

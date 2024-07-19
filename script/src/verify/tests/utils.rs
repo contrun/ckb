@@ -107,12 +107,12 @@ pub(crate) fn sign_args(args: &[u8], privkey: &Privkey) -> Signature {
 
 pub(crate) fn default_transaction_info() -> TransactionInfo {
     TransactionInfoBuilder::default()
-        .block_number(1u64.pack())
-        .block_epoch(0u64.pack())
+        .block_number(1u64)
+        .block_epoch(0u64)
         .key(
             TransactionKeyBuilder::default()
                 .block_hash(Byte32::zero())
-                .index(1u32.pack())
+                .index(1u32)
                 .build(),
         )
         .build()
@@ -268,7 +268,7 @@ pub(super) fn random_2_in_2_out_rtx() -> ResolvedTransaction {
 
     let cell_dep = CellDep::new_builder()
         .out_point(secp_out_point)
-        .dep_type(DepType::DepGroup.into())
+        .dep_type(DepType::DepGroup)
         .build();
 
     let input1 = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 0), 0);
@@ -285,13 +285,13 @@ pub(super) fn random_2_in_2_out_rtx() -> ResolvedTransaction {
     let lock = Script::new_builder()
         .args(lock_arg.pack())
         .code_hash(type_lock_script_code_hash().pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let lock2 = Script::new_builder()
         .args(lock_arg2.pack())
         .code_hash(type_lock_script_code_hash().pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let output1 = CellOutput::new_builder()
@@ -308,8 +308,8 @@ pub(super) fn random_2_in_2_out_rtx() -> ResolvedTransaction {
         .input(input2.clone())
         .output(output1)
         .output(output2)
-        .output_data(Default::default())
-        .output_data(Default::default())
+        .output_data(Bytes::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx_hash: H256 = tx.hash().unpack();

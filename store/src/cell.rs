@@ -41,16 +41,16 @@ pub fn attach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<()
                 .map(move |(index, (cell_output, data))| {
                     let out_point = packed::OutPoint::new_builder()
                         .tx_hash(tx_hash.clone())
-                        .index(index.pack())
+                        .index(index)
                         .build();
 
                     let entry = packed::CellEntryBuilder::default()
                         .output(cell_output)
                         .block_hash(block_hash.clone())
-                        .block_number(block_number.pack())
+                        .block_number(block_number)
                         .block_epoch(block_epoch.pack())
-                        .index(tx_index.pack())
-                        .data_size((data.len() as u64).pack())
+                        .index(tx_index)
+                        .data_size(data.len() as u64)
                         .build();
 
                     let data_entry = if !data.is_empty() {
@@ -111,16 +111,16 @@ pub fn detach_block_cell(txn: &StoreTransaction, block: &BlockView) -> Result<()
                         tx.output_with_data(*index).map(|(cell_output, data)| {
                             let out_point = packed::OutPoint::new_builder()
                                 .tx_hash(tx_hash.clone())
-                                .index(index.pack())
+                                .index(index)
                                 .build();
 
                             let entry = packed::CellEntryBuilder::default()
                                 .output(cell_output)
                                 .block_hash(block_hash.clone())
-                                .block_number(block_number.pack())
-                                .block_epoch(block_epoch.pack())
-                                .index(tx_index.pack())
-                                .data_size((data.len() as u64).pack())
+                                .block_number(block_number)
+                                .block_epoch(block_epoch)
+                                .index(tx_index)
+                                .data_size(data.len() as u64)
                                 .build();
 
                             let data_entry = if !data.is_empty() {

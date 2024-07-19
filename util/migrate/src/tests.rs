@@ -65,7 +65,7 @@ fn test_mock_migration() {
         for (index, tx) in genesis.transactions().into_iter().enumerate() {
             let key = packed::TransactionKey::new_builder()
                 .block_hash(hash.clone())
-                .index(index.pack())
+                .index(index)
                 .build();
             let tx_data = tx.pack();
             db_txn

@@ -461,7 +461,7 @@ impl BlockAssembler {
         let cellbase_lock = Script::new_builder()
             .args(config.args.as_bytes().pack())
             .code_hash(config.code_hash.pack())
-            .hash_type(hash_type.into())
+            .hash_type(hash_type)
             .build();
         let tip = snapshot.tip_header();
 

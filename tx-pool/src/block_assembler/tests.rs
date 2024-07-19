@@ -30,7 +30,7 @@ fn test_candidate_uncles_max_size() {
     for i in 0..(MAX_CANDIDATE_UNCLES + 3) {
         let number = i as BlockNumber;
         let block = BlockBuilder::default()
-            .number(number.pack())
+            .number(number)
             .epoch(EpochNumberWithFraction::new(number / 1000, number % 1000, 10000).pack())
             .build()
             .as_uncle();
@@ -60,7 +60,7 @@ fn test_candidate_uncles_max_per_height() {
     let mut blocks = Vec::new();
     for i in 0..(MAX_PER_HEIGHT + 3) {
         let block = BlockBuilder::default()
-            .timestamp((i as u64).pack())
+            .timestamp(i as u64)
             .build()
             .as_uncle();
         blocks.push(block);

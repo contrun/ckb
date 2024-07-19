@@ -78,10 +78,10 @@ pub fn inherit_block(shared: &Shared, parent_hash: &Byte32) -> BlockBuilder {
 
     BlockBuilder::default()
         .parent_hash(parent_hash.to_owned())
-        .number((parent.header().number() + 1).pack())
-        .timestamp((parent.header().timestamp() + 1).pack())
+        .number(parent.header().number() + 1)
+        .timestamp(parent.header().timestamp() + 1)
         .epoch(epoch.number_with_fraction(parent_number + 1).pack())
-        .compact_target(epoch.compact_target().pack())
+        .compact_target(epoch.compact_target())
         .dao(dao)
         .transaction(cellbase)
         .extension(Some(bytes))

@@ -13,11 +13,11 @@ fn test_block_short_ids() {
     ];
     let prefilled_transactions = vec![
         IndexTransactionBuilder::default()
-            .index(0u32.pack())
+            .index(0u32)
             .transaction(TransactionBuilder::default().build().data())
             .build(),
         IndexTransactionBuilder::default()
-            .index(2u32.pack())
+            .index(2u32)
             .transaction(TransactionBuilder::default().build().data())
             .build(),
     ];

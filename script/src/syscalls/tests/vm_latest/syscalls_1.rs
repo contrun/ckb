@@ -496,7 +496,7 @@ fn _test_load_cell_occupied_capacity(data: &[u8]) -> Result<(), TestCaseError> {
     let input_cell = CellMeta {
         out_point: OutPoint::default(),
         transaction_info: None,
-        cell_output: CellOutput::new_builder().capacity(100.pack()).build(),
+        cell_output: CellOutput::new_builder().capacity(100).build(),
         data_bytes: 0,
         mem_cell_data: Some(data),
         mem_cell_data_hash: Some(data_hash),
@@ -558,7 +558,7 @@ fn test_load_missing_data_hash() {
     let input_cell = CellMeta {
         out_point: OutPoint::default(),
         transaction_info: None,
-        cell_output: CellOutput::new_builder().capacity(100.pack()).build(),
+        cell_output: CellOutput::new_builder().capacity(100).build(),
         data_bytes: 0,
         mem_cell_data: None,
         mem_cell_data_hash: None,
@@ -668,7 +668,7 @@ fn _test_load_header(
             block_epoch: header.epoch(),
             index: 1,
         }),
-        cell_output: CellOutput::new_builder().capacity(100.pack()).build(),
+        cell_output: CellOutput::new_builder().capacity(100).build(),
         data_bytes: 0,
         mem_cell_data: None,
         mem_cell_data_hash: None,
@@ -773,7 +773,7 @@ fn _test_load_header_by_field(data: &[u8], field: HeaderField) -> Result<(), Tes
     let epoch = EpochNumberWithFraction::new(1, 40, 1000);
     let header = HeaderBuilder::default()
         .transactions_root(data_hash.pack())
-        .number(2000.pack())
+        .number(2000)
         .epoch(epoch.pack())
         .build();
 
@@ -948,7 +948,7 @@ fn _test_load_current_script_hash(data: &[u8]) -> Result<(), TestCaseError> {
 
     let script = Script::new_builder()
         .args(Bytes::from(data.to_owned()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let hash = script.calc_script_hash();
     let data = hash.raw_data();
@@ -1003,7 +1003,7 @@ fn _test_load_input_lock_script_hash(data: &[u8]) -> Result<(), TestCaseError> {
 
     let script = Script::new_builder()
         .args(Bytes::from(data.to_owned()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let h = script.calc_script_hash();
     let hash = h.as_bytes();
@@ -1069,7 +1069,7 @@ fn _test_load_input_lock_script(data: &[u8]) -> Result<(), TestCaseError> {
 
     let script = Script::new_builder()
         .args(Bytes::from(data.to_owned()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let lock = script.as_slice();
 
@@ -1137,7 +1137,7 @@ fn _test_load_input_type_script(data: &[u8]) -> Result<(), TestCaseError> {
 
     let script = Script::new_builder()
         .args(Bytes::from(data.to_owned()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let type_ = script.as_slice();
 
@@ -1205,7 +1205,7 @@ fn _test_load_input_type_script_hash(data: &[u8]) -> Result<(), TestCaseError> {
 
     let script = Script::new_builder()
         .args(Bytes::from(data.to_owned()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
 
     let type_h = script.calc_script_hash();
@@ -1859,13 +1859,8 @@ fn _test_load_input(
     let data = Bytes::from(data.to_owned());
     let hash = blake2b_256(&data).pack();
     let input = CellInput::new_builder()
-        .previous_output(
-            OutPoint::new_builder()
-                .tx_hash(hash)
-                .index(0u32.pack())
-                .build(),
-        )
-        .since(10u64.pack())
+        .previous_output(OutPoint::new_builder().tx_hash(hash).index(0u32).build())
+        .since(10u64)
         .build();
     let previous_output = input.previous_output();
 

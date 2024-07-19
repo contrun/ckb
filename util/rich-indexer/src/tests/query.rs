@@ -44,7 +44,7 @@ async fn get_cells() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(
             hex::decode("62e907b15cbf27d5425399ebf6f0fb50ebb88f18")
                 .expect("Decoding failed")
@@ -69,7 +69,7 @@ async fn get_cells() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(hex::decode("62e907b15cbf").expect("Decoding failed").pack())
         .build();
     let search_key = IndexerSearchKey {
@@ -116,7 +116,7 @@ async fn get_cells() {
         .code_hash(
             h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
         )
-        .hash_type((ScriptHashType::Type as u8).into())
+        .hash_type(ScriptHashType::Type as u8)
         .args(
             h256!("0xb2a8500929d6a1294bf9bf1bf565f549fa4a5f1316a3306ad3d4783e64bcf626")
                 .as_bytes()
@@ -127,8 +127,8 @@ async fn get_cells() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
-        .args(vec![].as_slice().pack())
+        .hash_type(ScriptHashType::Data as u8)
+        .args(vec![].as_slice())
         .build();
     let lock_script_len = extract_raw_data(&lock_script).len() as u64;
     let search_key = IndexerSearchKey {
@@ -174,7 +174,7 @@ async fn get_cells_filter_data() {
             .code_hash(
                 h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
             )
-            .hash_type((ScriptHashType::Type as u8).into())
+            .hash_type(ScriptHashType::Type as u8)
             .args(
                 hex::decode("b2a8500929d6a1294bf9bf1bf565f549fa4a5f1316a3306ad3d4783e64bcf626")
                     .expect("Decoding failed")
@@ -229,7 +229,7 @@ async fn get_cells_by_cursor() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(hex::decode("").expect("Decoding failed").pack())
         .build();
     let search_key = IndexerSearchKey {
@@ -289,7 +289,7 @@ async fn get_transactions_ungrouped() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(hex::decode("").expect("Decoding failed").pack())
         .build();
 
@@ -347,7 +347,7 @@ async fn get_transactions_ungrouped() {
         .code_hash(
             h256!("0x709f3fda12f561cfacf92273c57a98fede188a3f1a59b1f888d113f9cce08649").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(
             hex::decode("b73961e46d9eb118d3de1d1e8f30b3af7bbf3160")
                 .expect("Decoding failed")
@@ -413,7 +413,7 @@ async fn get_transactions_grouped() {
         .code_hash(
             h256!("0x0000000000000000000000000000000000000000000000000000000000000000").pack(),
         )
-        .hash_type((ScriptHashType::Data as u8).into())
+        .hash_type(ScriptHashType::Data as u8)
         .args(hex::decode("").expect("Decoding failed").pack())
         .build();
 
@@ -495,7 +495,7 @@ async fn get_cells_capacity() {
             .code_hash(
                 h256!("0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8").pack(),
             )
-            .hash_type((ScriptHashType::Type as u8).into())
+            .hash_type(ScriptHashType::Type as u8)
             .args(
                 hex::decode("57ccb07be6875f61d93636b0ee11b675494627d2")
                     .expect("Decoding failed")
@@ -526,7 +526,7 @@ async fn get_cells_capacity() {
             .code_hash(
                 h256!("0x00000000000000000000000000000000000000000000000000545950455f4944").pack(),
             )
-            .hash_type((ScriptHashType::Type as u8).into())
+            .hash_type(ScriptHashType::Type as u8)
             .args(
                 hex::decode("500929d6a1294bf9bf1bf565f549fa4a5f1316a3306ad3d4783e64bc")
                     .expect("Decoding failed")
@@ -562,25 +562,25 @@ async fn rpc() {
     // setup test data
     let lock_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"lock_script1".to_vec()).pack())
         .build();
 
     let lock_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script2".to_vec()).pack())
         .build();
 
     let type_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script1".to_vec()).pack())
         .build();
 
     let type_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"type_script2".to_vec()).pack())
         .build();
 
@@ -593,7 +593,7 @@ async fn rpc() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx00 = TransactionBuilder::default()
@@ -604,7 +604,7 @@ async fn rpc() {
                 .type_(Some(type_script1.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx01 = TransactionBuilder::default()
@@ -615,14 +615,14 @@ async fn rpc() {
                 .type_(Some(type_script2.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block0 = BlockBuilder::default()
         .transaction(cellbase0)
         .transaction(tx00.clone())
         .transaction(tx01.clone())
-        .header(HeaderBuilder::default().number(0.pack()).build())
+        .header(HeaderBuilder::default().number(0).build())
         .build();
 
     indexer.append(&block0).await.unwrap();
@@ -651,7 +651,7 @@ async fn rpc() {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         pre_tx1 = TransactionBuilder::default()
@@ -663,7 +663,7 @@ async fn rpc() {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         pre_block = BlockBuilder::default()
@@ -672,7 +672,7 @@ async fn rpc() {
             .transaction(pre_tx1.clone())
             .header(
                 HeaderBuilder::default()
-                    .number((pre_block.number() + 1).pack())
+                    .number(pre_block.number() + 1)
                     .parent_hash(pre_block.hash())
                     .epoch(
                         EpochNumberWithFraction::new(
@@ -1109,7 +1109,7 @@ async fn rpc() {
                 .type_(Some(type_script1).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
     pool.write().unwrap().new_transaction(&pool_tx);
 
@@ -1170,25 +1170,25 @@ async fn script_search_mode_rpc() {
     // setup test data
     let lock_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script1".to_vec()).pack())
         .build();
 
     let lock_script11 = ScriptBuilder::default()
         .code_hash(lock_script1.code_hash())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script11".to_vec()).pack())
         .build();
 
     let type_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script1".to_vec()).pack())
         .build();
 
     let type_script11 = ScriptBuilder::default()
         .code_hash(type_script1.code_hash())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script11".to_vec()).pack())
         .build();
 
@@ -1201,7 +1201,7 @@ async fn script_search_mode_rpc() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx00 = TransactionBuilder::default()
@@ -1212,7 +1212,7 @@ async fn script_search_mode_rpc() {
                 .type_(Some(type_script1.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx01 = TransactionBuilder::default()
@@ -1223,14 +1223,14 @@ async fn script_search_mode_rpc() {
                 .type_(Some(type_script11.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block0 = BlockBuilder::default()
         .transaction(cellbase0)
         .transaction(tx00.clone())
         .transaction(tx01.clone())
-        .header(HeaderBuilder::default().number(0.pack()).build())
+        .header(HeaderBuilder::default().number(0).build())
         .build();
 
     indexer.append(&block0).await.unwrap();
@@ -1259,7 +1259,7 @@ async fn script_search_mode_rpc() {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         pre_tx1 = TransactionBuilder::default()
@@ -1271,7 +1271,7 @@ async fn script_search_mode_rpc() {
                     .type_(Some(type_script11.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         pre_block = BlockBuilder::default()
@@ -1280,7 +1280,7 @@ async fn script_search_mode_rpc() {
             .transaction(pre_tx1.clone())
             .header(
                 HeaderBuilder::default()
-                    .number((pre_block.number() + 1).pack())
+                    .number(pre_block.number() + 1)
                     .parent_hash(pre_block.hash())
                     .epoch(
                         EpochNumberWithFraction::new(
@@ -1419,25 +1419,25 @@ async fn output_data_filter_mode_rpc() {
     // setup test data
     let lock_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script1".to_vec()).pack())
         .build();
 
     let lock_script11 = ScriptBuilder::default()
         .code_hash(lock_script1.code_hash())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script11".to_vec()).pack())
         .build();
 
     let type_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script1".to_vec()).pack())
         .build();
 
     let type_script11 = ScriptBuilder::default()
         .code_hash(type_script1.code_hash())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script11".to_vec()).pack())
         .build();
 
@@ -1450,7 +1450,7 @@ async fn output_data_filter_mode_rpc() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx00 = TransactionBuilder::default()
@@ -1461,7 +1461,7 @@ async fn output_data_filter_mode_rpc() {
                 .type_(Some(type_script1.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx01 = TransactionBuilder::default()
@@ -1479,7 +1479,7 @@ async fn output_data_filter_mode_rpc() {
         .transaction(cellbase0)
         .transaction(tx00.clone())
         .transaction(tx01.clone())
-        .header(HeaderBuilder::default().number(0.pack()).build())
+        .header(HeaderBuilder::default().number(0).build())
         .build();
 
     indexer.append(&block0).await.unwrap();

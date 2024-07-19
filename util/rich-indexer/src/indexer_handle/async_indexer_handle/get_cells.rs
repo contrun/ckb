@@ -244,11 +244,11 @@ impl AsyncRichIndexerHandle {
 fn build_indexer_cell(row: &AnyRow) -> IndexerCell {
     let out_point = OutPointBuilder::default()
         .tx_hash(to_fixed_array::<32>(&row.get::<Vec<u8>, _>("tx_hash")).pack())
-        .index((row.get::<i32, _>("output_index") as u32).pack())
+        .index(row.get::<i32, _>("output_index") as u32)
         .build();
     let lock_script = ScriptBuilder::default()
         .code_hash(to_fixed_array::<32>(&row.get::<Vec<u8>, _>("lock_code_hash")).pack())
-        .hash_type((row.get::<i16, _>("lock_hash_type") as u8).into())
+        .hash_type(row.get::<i16, _>("lock_hash_type") as u8)
         .args(row.get::<Vec<u8>, _>("lock_args").pack())
         .build();
     let type_script = row
@@ -257,12 +257,12 @@ fn build_indexer_cell(row: &AnyRow) -> IndexerCell {
         .map(|value| {
             ScriptBuilder::default()
                 .code_hash(to_fixed_array::<32>(value).pack())
-                .hash_type((row.get::<Option<i16>, _>("type_hash_type").unwrap() as u8).into())
+                .hash_type(row.get::<Option<i16>, _>("type_hash_type").unwrap() as u8)
                 .args(row.get::<Option<Vec<u8>>, _>("type_args").unwrap().pack())
                 .build()
         });
     let output = CellOutputBuilder::default()
-        .capacity((row.get::<i64, _>("capacity") as u64).pack())
+        .capacity(row.get::<i64, _>("capacity") as u64)
         .lock(lock_script)
         .type_(type_script.pack())
         .build();

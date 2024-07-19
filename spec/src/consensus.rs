@@ -200,7 +200,7 @@ impl Default for ConsensusBuilder {
         .expect("genesis dao data calculation error!");
 
         let genesis_block = BlockBuilder::default()
-            .compact_target(DIFF_TWO.pack())
+            .compact_target(DIFF_TWO)
             .epoch(EpochNumberWithFraction::new_unchecked(0, 0, 0).pack())
             .dao(dao)
             .transaction(cellbase)

@@ -25,10 +25,10 @@ fn test_signing_alert_using_dummy_keypair() {
     let verifier = Verifier::new(config);
     let raw_alert = packed::RawAlert::new_builder()
         // 3 months later
-        .notice_until(1681574400000u64.pack())
-        .id(20230001u32.pack())
-        .cancel(0u32.pack())
-        .priority(20u32.pack())
+        .notice_until(1681574400000u64 )
+        .id(20230001u32 )
+        .cancel(0u32 )
+        .priority(20u32 )
         .message("CKB v0.105.* have bugs. Please upgrade to the latest version.".pack())
         .min_version(Some("0.105.0-pre").pack())
         .max_version(Some("0.105.1").pack())
@@ -61,10 +61,10 @@ fn test_alert_20230001() {
     let verifier = Verifier::new(config);
     let raw_alert = packed::RawAlert::new_builder()
         // 3 months later
-        .notice_until(1681574400000u64.pack())
-        .id(20230001u32.pack())
-        .cancel(0u32.pack())
-        .priority(20u32.pack())
+        .notice_until(1681574400000u64 )
+        .id(20230001u32 )
+        .cancel(0u32 )
+        .priority(20u32 )
         .message("CKB v0.105.* have bugs. Please upgrade to the latest version.".pack())
         .min_version(Some("0.105.0-pre").pack())
         .max_version(Some("0.105.1").pack())

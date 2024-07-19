@@ -45,7 +45,7 @@ pub(crate) fn new_index_transaction(index: usize) -> IndexTransaction {
         .build();
 
     IndexTransactionBuilder::default()
-        .index(index.pack())
+        .index(index)
         .transaction(transaction.data())
         .build()
 }
@@ -60,10 +60,10 @@ pub(crate) fn new_header_builder(shared: &Shared, parent: &HeaderView) -> Header
         .epoch();
     HeaderBuilder::default()
         .parent_hash(parent_hash)
-        .number((parent.number() + 1).pack())
-        .timestamp((parent.timestamp() + 1).pack())
+        .number(parent.number() + 1)
+        .timestamp(parent.timestamp() + 1)
         .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
-        .compact_target(epoch.compact_target().pack())
+        .compact_target(epoch.compact_target())
 }
 
 pub(crate) fn new_transaction(
@@ -146,9 +146,9 @@ pub(crate) fn build_chain(tip: BlockNumber) -> (Relayer, OutPoint) {
     let (shared, mut pack) = {
         let dao = genesis_dao_data(vec![&always_success_tx]).unwrap();
         let genesis = BlockBuilder::default()
-            .timestamp(unix_time_as_millis().pack())
+            .timestamp(unix_time_as_millis())
             .dao(dao)
-            .compact_target(difficulty_to_compact(U256::from(1000u64)).pack())
+            .compact_target(difficulty_to_compact(U256::from(1000u64)))
             .transaction(always_success_tx)
             .build();
         let epoch_ext = build_genesis_epoch_ext(
@@ -272,19 +272,17 @@ pub(crate) fn gen_block(
     let mut block_builder = BlockBuilder::default()
         .parent_hash(parent_header.hash())
         .timestamp(
-            (parent_header
+            parent_header
                 .timestamp()
                 .checked_add_signed(timestamp_delta)
-                .unwrap())
-            .pack(),
+                .unwrap(),
         )
-        .number(number.pack())
+        .number(number)
         .compact_target(
-            (epoch
+            epoch
                 .compact_target()
                 .checked_add_signed(target_delta)
-                .unwrap())
-            .pack(),
+                .unwrap(),
         )
         .dao(dao)
         .epoch(epoch.number_with_fraction(number).pack())

@@ -28,7 +28,7 @@ fn test_hint_instructions() {
         load_cell_from_path("testdata/cadd_hint_lock");
 
     let always_success_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(always_success_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -77,7 +77,7 @@ fn test_b_extension() {
     let (cpop_lock_cell, cpop_lock_data_hash) = load_cell_from_path("testdata/cpop_lock");
 
     let cpop_lock_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(cpop_lock_data_hash)
         .args(args)
         .build();
@@ -118,7 +118,7 @@ fn test_cycles_difference() {
         load_cell_from_path("testdata/mop_adc_lock");
 
     let always_success_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(always_success_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -157,7 +157,7 @@ fn check_current_cycles() {
         load_cell_from_path("testdata/current_cycles");
 
     let current_cycles_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(current_cycles_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -189,7 +189,7 @@ fn check_current_cycles_with_snapshot() {
         load_cell_from_path("testdata/current_cycles_with_snapshot");
 
     let current_cycles_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(current_cycles_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -234,7 +234,7 @@ fn check_vm_version() {
     let (vm_version_cell, vm_version_data_hash) = load_cell_from_path("testdata/vm_version");
 
     let vm_version_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(vm_version_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -266,7 +266,7 @@ fn check_vm_version_with_snapshot() {
         load_cell_from_path("testdata/vm_version_with_snapshot");
 
     let vm_version_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(vm_version_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -313,7 +313,7 @@ fn check_exec_from_cell_data() {
     let (exec_callee_cell, _exec_callee_data_hash) = load_cell_from_path("testdata/exec_callee");
 
     let exec_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(exec_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -346,7 +346,7 @@ fn check_exec_from_witness() {
     let (exec_callee_cell, _exec_caller_data_hash) = load_cell_from_path("testdata/exec_callee");
 
     let exec_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(exec_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -384,7 +384,7 @@ fn check_exec_wrong_callee_format() {
         load_cell_from_slice(&[0x00, 0x01, 0x02, 0x03]);
 
     let exec_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(exec_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -418,7 +418,7 @@ fn check_exec_big_offset_length() {
         load_cell_from_slice(&[0x00, 0x01, 0x02, 0x03]);
 
     let exec_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(exec_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -454,7 +454,7 @@ fn _check_type_id_one_in_one_out_resume(step_cycles: Cycle) -> Result<(), TestCa
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -600,7 +600,7 @@ fn _check_type_id_one_in_one_out_resume_with_state(
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -992,7 +992,7 @@ fn load_code_into_global() {
             load_cell_from_path("testdata/load_is_even_into_global");
 
         let dyn_lock_script = Script::new_builder()
-            .hash_type(script_version.data_hash_type().into())
+            .hash_type(script_version.data_hash_type())
             .code_hash(dyn_lock_data_hash)
             .args(args)
             .build();
@@ -1044,7 +1044,7 @@ fn load_code_with_snapshot() {
             load_cell_from_path("testdata/load_is_even_with_snapshot");
 
         let dyn_lock_script = Script::new_builder()
-            .hash_type(script_version.data_hash_type().into())
+            .hash_type(script_version.data_hash_type())
             .code_hash(dyn_lock_data_hash)
             .args(args)
             .build();
@@ -1135,7 +1135,7 @@ fn load_code_with_snapshot_more_times() {
         };
 
         let lock_script = Script::new_builder()
-            .hash_type(script_version.data_hash_type().into())
+            .hash_type(script_version.data_hash_type())
             .code_hash(lock_data_hash)
             .args(args)
             .build();
@@ -1265,7 +1265,7 @@ fn test_exec(
             always_success_cell();
 
         let exec_caller_script = Script::new_builder()
-            .hash_type(script_version.data_hash_type().into())
+            .hash_type(script_version.data_hash_type())
             .code_hash(exec_caller_data_hash)
             .args(args)
             .build();
@@ -1725,7 +1725,7 @@ fn check_signature_referenced_via_type_hash_ok_with_multiple_matches() {
             Some(
                 Script::new_builder()
                     .code_hash(h256!("0x123456abcd90").pack())
-                    .hash_type(ScriptHashType::Data.into())
+                    .hash_type(ScriptHashType::Data)
                     .build(),
             )
             .pack(),
@@ -1747,7 +1747,7 @@ fn check_signature_referenced_via_type_hash_ok_with_multiple_matches() {
             Some(
                 Script::new_builder()
                     .code_hash(h256!("0x123456abcd90").pack())
-                    .hash_type(ScriptHashType::Data.into())
+                    .hash_type(ScriptHashType::Data)
                     .build(),
             )
             .pack(),
@@ -1761,7 +1761,7 @@ fn check_signature_referenced_via_type_hash_ok_with_multiple_matches() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(type_hash)
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
     let input = CellInput::new(OutPoint::null(), 0);
 

@@ -32,7 +32,7 @@ fn load_cell_from_path(path: &str) -> (CellOutput, Bytes, Script) {
         .build();
 
     let script = Script::new_builder()
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .code_hash(CellOutput::calc_data_hash(&data))
         .build();
 
@@ -139,8 +139,8 @@ pub fn always_success_consensus() -> Consensus {
         .build();
     let dao = genesis_dao_data(vec![&always_success_tx]).unwrap();
     let genesis = BlockBuilder::default()
-        .timestamp(GENESIS_TIMESTAMP.pack())
-        .compact_target(difficulty_to_compact(U256::from(1000u64)).pack())
+        .timestamp(GENESIS_TIMESTAMP)
+        .compact_target(difficulty_to_compact(U256::from(1000u64)))
         .dao(dao)
         .transaction(always_success_tx)
         .build();

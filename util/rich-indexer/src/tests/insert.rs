@@ -80,25 +80,25 @@ async fn with_custom_block_filter() {
 
     let lock_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"lock_script1".to_vec()).pack())
         .build();
 
     let lock_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script2".to_vec()).pack())
         .build();
 
     let type_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script1".to_vec()).pack())
         .build();
 
     let type_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"type_script2".to_vec()).pack())
         .build();
 
@@ -111,7 +111,7 @@ async fn with_custom_block_filter() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx00 = TransactionBuilder::default()
@@ -122,7 +122,7 @@ async fn with_custom_block_filter() {
                 .type_(Some(type_script1.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx01 = TransactionBuilder::default()
@@ -133,14 +133,14 @@ async fn with_custom_block_filter() {
                 .type_(Some(type_script2.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block0 = BlockBuilder::default()
         .transaction(cellbase0)
         .transaction(tx00.clone())
         .transaction(tx01.clone())
-        .header(HeaderBuilder::default().number(0.pack()).build())
+        .header(HeaderBuilder::default().number(0).build())
         .build();
     indexer.append(&block0).await.unwrap();
     let tip = indexer_handle.get_indexer_tip().await.unwrap().unwrap();
@@ -156,7 +156,7 @@ async fn with_custom_block_filter() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx10 = TransactionBuilder::default()
@@ -168,7 +168,7 @@ async fn with_custom_block_filter() {
                 .type_(Some(type_script1).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx11 = TransactionBuilder::default()
@@ -180,7 +180,7 @@ async fn with_custom_block_filter() {
                 .type_(Some(type_script2).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block1 = BlockBuilder::default()
@@ -189,7 +189,7 @@ async fn with_custom_block_filter() {
         .transaction(tx11)
         .header(
             HeaderBuilder::default()
-                .number(1.pack())
+                .number(1)
                 .parent_hash(block0.hash())
                 .epoch(
                     EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000).pack(),
@@ -294,25 +294,25 @@ async fn with_custom_cell_filter() {
 
     let lock_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"lock_script1".to_vec()).pack())
         .build();
 
     let lock_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"lock_script2".to_vec()).pack())
         .build();
 
     let type_script1 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(b"type_script1".to_vec()).pack())
         .build();
 
     let type_script2 = ScriptBuilder::default()
         .code_hash(H256(rand::random()).pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(Bytes::from(b"type_script2".to_vec()).pack())
         .build();
 
@@ -325,7 +325,7 @@ async fn with_custom_cell_filter() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx00 = TransactionBuilder::default()
@@ -336,7 +336,7 @@ async fn with_custom_cell_filter() {
                 .type_(Some(type_script1.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx01 = TransactionBuilder::default()
@@ -347,14 +347,14 @@ async fn with_custom_cell_filter() {
                 .type_(Some(type_script2.clone()).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block0 = BlockBuilder::default()
         .transaction(cellbase0)
         .transaction(tx00.clone())
         .transaction(tx01.clone())
-        .header(HeaderBuilder::default().number(0.pack()).build())
+        .header(HeaderBuilder::default().number(0).build())
         .build();
     indexer.append(&block0).await.unwrap();
     let tip = indexer_handle.get_indexer_tip().await.unwrap().unwrap();
@@ -404,7 +404,7 @@ async fn with_custom_cell_filter() {
                 .lock(lock_script1.clone())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx10 = TransactionBuilder::default()
@@ -416,7 +416,7 @@ async fn with_custom_cell_filter() {
                 .type_(Some(type_script1).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let tx11 = TransactionBuilder::default()
@@ -428,7 +428,7 @@ async fn with_custom_cell_filter() {
                 .type_(Some(type_script2).pack())
                 .build(),
         )
-        .output_data(Default::default())
+        .output_data(Bytes::default())
         .build();
 
     let block1 = BlockBuilder::default()
@@ -437,7 +437,7 @@ async fn with_custom_cell_filter() {
         .transaction(tx11)
         .header(
             HeaderBuilder::default()
-                .number(1.pack())
+                .number(1)
                 .parent_hash(block0.hash())
                 .epoch(
                     EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000).pack(),

@@ -63,7 +63,7 @@ fn check_dao_data_calculation() {
     let parent_number = 12345;
     let epoch = EpochNumberWithFraction::new(12, 345, 1000);
     let parent_header = HeaderBuilder::default()
-        .number(parent_number.pack())
+        .number(parent_number)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -95,7 +95,7 @@ fn check_initial_dao_data_calculation() {
 
     let parent_number = 0;
     let parent_header = HeaderBuilder::default()
-        .number(parent_number.pack())
+        .number(parent_number)
         .dao(pack_dao_data(
             10_000_000_000_000_000,
             Capacity::shannons(500_000_000_000_000),
@@ -127,7 +127,7 @@ fn check_first_epoch_block_dao_data_calculation() {
     let parent_number = 12340;
     let epoch = EpochNumberWithFraction::new(12, 340, 1000);
     let parent_header = HeaderBuilder::default()
-        .number(parent_number.pack())
+        .number(parent_number)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -160,7 +160,7 @@ fn check_dao_data_calculation_overflows() {
     let parent_number = 12345;
     let epoch = EpochNumberWithFraction::new(12, 345, 1000);
     let parent_header = HeaderBuilder::default()
-        .number(parent_number.pack())
+        .number(parent_number)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -183,7 +183,7 @@ fn check_dao_data_calculation_with_transactions() {
     let parent_number = 12345;
     let epoch = EpochNumberWithFraction::new(12, 345, 1000);
     let parent_header = HeaderBuilder::default()
-        .number(parent_number.pack())
+        .number(parent_number)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -243,7 +243,7 @@ fn check_withdraw_calculation() {
         .build();
     let epoch = EpochNumberWithFraction::new(1, 100, 1000);
     let deposit_header = HeaderBuilder::default()
-        .number(100.pack())
+        .number(100)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -259,7 +259,7 @@ fn check_withdraw_calculation() {
 
     let epoch = EpochNumberWithFraction::new(1, 200, 1000);
     let withdrawing_header = HeaderBuilder::default()
-        .number(200.pack())
+        .number(200)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_001_123_456,
@@ -300,7 +300,7 @@ fn check_withdraw_calculation_overflows() {
     let tx = TransactionBuilder::default().output(output.clone()).build();
     let epoch = EpochNumberWithFraction::new(1, 100, 1000);
     let deposit_header = HeaderBuilder::default()
-        .number(100.pack())
+        .number(100)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_000_123_456,
@@ -316,7 +316,7 @@ fn check_withdraw_calculation_overflows() {
 
     let epoch = EpochNumberWithFraction::new(1, 200, 1000);
     let withdrawing_header = HeaderBuilder::default()
-        .number(200.pack())
+        .number(200)
         .epoch(epoch.pack())
         .dao(pack_dao_data(
             10_000_000_001_123_456,

@@ -956,25 +956,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -987,7 +987,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -998,7 +998,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -1009,14 +1009,14 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00)
             .transaction(tx01)
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
 
         indexer.append(&block0).unwrap();
@@ -1039,25 +1039,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -1070,7 +1070,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -1081,7 +1081,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -1092,14 +1092,14 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00.clone())
             .transaction(tx01.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
         indexer.append(&block0).unwrap();
 
@@ -1112,7 +1112,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx10 = TransactionBuilder::default()
@@ -1124,7 +1124,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx11 = TransactionBuilder::default()
@@ -1136,7 +1136,7 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block1 = BlockBuilder::default()
@@ -1145,7 +1145,7 @@ mod tests {
             .transaction(tx11)
             .header(
                 HeaderBuilder::default()
-                    .number(1.pack())
+                    .number(1)
                     .parent_hash(block0.hash())
                     .epoch(
                         EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000)
@@ -1200,25 +1200,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -1231,7 +1231,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -1242,7 +1242,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -1253,14 +1253,14 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0.clone())
             .transaction(tx00.clone())
             .transaction(tx01.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
         indexer.append(&block0).unwrap();
 
@@ -1273,7 +1273,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx10 = TransactionBuilder::default()
@@ -1285,7 +1285,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx11 = TransactionBuilder::default()
@@ -1297,7 +1297,7 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx12 = TransactionBuilder::default()
@@ -1309,7 +1309,7 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block1 = BlockBuilder::default()
@@ -1319,7 +1319,7 @@ mod tests {
             .transaction(tx12)
             .header(
                 HeaderBuilder::default()
-                    .number(1.pack())
+                    .number(1)
                     .parent_hash(block0.hash())
                     .epoch(
                         EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000)
@@ -1372,25 +1372,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -1403,7 +1403,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -1414,7 +1414,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -1425,14 +1425,14 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00.clone())
             .transaction(tx01.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
 
         indexer.append(&block0).unwrap();
@@ -1449,7 +1449,7 @@ mod tests {
                         .lock(lock_script1.clone())
                         .build(),
                 )
-                .output_data(Default::default())
+                .output_data(Bytes::default())
                 .build();
 
             pre_tx0 = TransactionBuilder::default()
@@ -1461,7 +1461,7 @@ mod tests {
                         .type_(Some(type_script1.clone()).pack())
                         .build(),
                 )
-                .output_data(Default::default())
+                .output_data(Bytes::default())
                 .build();
 
             pre_tx1 = TransactionBuilder::default()
@@ -1473,7 +1473,7 @@ mod tests {
                         .type_(Some(type_script2.clone()).pack())
                         .build(),
                 )
-                .output_data(Default::default())
+                .output_data(Bytes::default())
                 .build();
 
             pre_block = BlockBuilder::default()
@@ -1482,7 +1482,7 @@ mod tests {
                 .transaction(pre_tx1.clone())
                 .header(
                     HeaderBuilder::default()
-                        .number((pre_block.number() + 1).pack())
+                        .number(pre_block.number() + 1)
                         .parent_hash(pre_block.hash())
                         .epoch(
                             EpochNumberWithFraction::new(
@@ -1527,7 +1527,7 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
@@ -1540,12 +1540,12 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
 
         indexer.append(&block0).unwrap();
@@ -1562,14 +1562,14 @@ mod tests {
                         .lock(lock_script1.clone())
                         .build(),
                 )
-                .output_data(Default::default())
+                .output_data(Bytes::default())
                 .build();
 
             pre_block = BlockBuilder::default()
                 .transaction(cellbase)
                 .header(
                     HeaderBuilder::default()
-                        .number((pre_block.number() + 1).pack())
+                        .number(pre_block.number() + 1)
                         .parent_hash(pre_block.hash())
                         .epoch(
                             EpochNumberWithFraction::new(
@@ -1599,25 +1599,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -1630,7 +1630,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -1641,7 +1641,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -1652,14 +1652,14 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00)
             .transaction(tx01)
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
 
         indexer.append(&block0).unwrap();
@@ -1683,12 +1683,12 @@ mod tests {
 
         let all_zero_lock_script = ScriptBuilder::default()
             .code_hash(H256([0; 32]).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .build();
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
@@ -1701,12 +1701,12 @@ mod tests {
                     .lock(all_zero_lock_script.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
 
         indexer.append(&block0).unwrap();
@@ -1732,14 +1732,14 @@ mod tests {
                         .lock(lock_script1.clone())
                         .build(),
                 )
-                .output_data(Default::default())
+                .output_data(Bytes::default())
                 .build();
 
             pre_block = BlockBuilder::default()
                 .transaction(cellbase)
                 .header(
                     HeaderBuilder::default()
-                        .number((pre_block.number() + 1).pack())
+                        .number(pre_block.number() + 1)
                         .parent_hash(pre_block.hash())
                         .epoch(
                             EpochNumberWithFraction::new(
@@ -1778,7 +1778,7 @@ mod tests {
                 .transaction(cellbase)
                 .header(
                     HeaderBuilder::default()
-                        .number(i.pack())
+                        .number(i)
                         .epoch(EpochNumberWithFraction::new(i + 1, i, 1000).pack())
                         .build(),
                 )
@@ -1805,13 +1805,13 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
@@ -1824,7 +1824,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -1835,13 +1835,13 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0.clone())
             .transaction(tx00.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
         indexer.append(&block0).unwrap();
 
@@ -1854,7 +1854,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx10 = TransactionBuilder::default()
@@ -1866,7 +1866,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block1 = BlockBuilder::default()
@@ -1874,7 +1874,7 @@ mod tests {
             .transaction(tx10)
             .header(
                 HeaderBuilder::default()
-                    .number(1.pack())
+                    .number(1)
                     .parent_hash(block0.hash())
                     .epoch(
                         EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000)
@@ -1959,25 +1959,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -1990,7 +1990,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -2001,7 +2001,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -2012,14 +2012,14 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00.clone())
             .transaction(tx01.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
         indexer.append(&block0).unwrap();
         let (tip_number, tip_hash) = indexer.tip().unwrap().unwrap();
@@ -2035,7 +2035,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx10 = TransactionBuilder::default()
@@ -2047,7 +2047,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx11 = TransactionBuilder::default()
@@ -2059,7 +2059,7 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block1 = BlockBuilder::default()
@@ -2068,7 +2068,7 @@ mod tests {
             .transaction(tx11)
             .header(
                 HeaderBuilder::default()
-                    .number(1.pack())
+                    .number(1)
                     .parent_hash(block0.hash())
                     .epoch(
                         EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000)
@@ -2127,25 +2127,25 @@ mod tests {
 
         let lock_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"lock_script1".to_vec()).pack())
             .build();
 
         let lock_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"lock_script2".to_vec()).pack())
             .build();
 
         let type_script1 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .args(Bytes::from(b"type_script1".to_vec()).pack())
             .build();
 
         let type_script2 = ScriptBuilder::default()
             .code_hash(H256(rand::random()).pack())
-            .hash_type(ScriptHashType::Type.into())
+            .hash_type(ScriptHashType::Type)
             .args(Bytes::from(b"type_script2".to_vec()).pack())
             .build();
 
@@ -2158,7 +2158,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx00 = TransactionBuilder::default()
@@ -2169,7 +2169,7 @@ mod tests {
                     .type_(Some(type_script1.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx01 = TransactionBuilder::default()
@@ -2180,14 +2180,14 @@ mod tests {
                     .type_(Some(type_script2.clone()).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block0 = BlockBuilder::default()
             .transaction(cellbase0)
             .transaction(tx00.clone())
             .transaction(tx01.clone())
-            .header(HeaderBuilder::default().number(0.pack()).build())
+            .header(HeaderBuilder::default().number(0).build())
             .build();
         indexer.append(&block0).unwrap();
         let (tip_number, tip_hash) = indexer.tip().unwrap().unwrap();
@@ -2217,7 +2217,7 @@ mod tests {
                     .lock(lock_script1.clone())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx10 = TransactionBuilder::default()
@@ -2229,7 +2229,7 @@ mod tests {
                     .type_(Some(type_script1).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let tx11 = TransactionBuilder::default()
@@ -2241,7 +2241,7 @@ mod tests {
                     .type_(Some(type_script2).pack())
                     .build(),
             )
-            .output_data(Default::default())
+            .output_data(Bytes::default())
             .build();
 
         let block1 = BlockBuilder::default()
@@ -2250,7 +2250,7 @@ mod tests {
             .transaction(tx11)
             .header(
                 HeaderBuilder::default()
-                    .number(1.pack())
+                    .number(1)
                     .parent_hash(block0.hash())
                     .epoch(
                         EpochNumberWithFraction::new(block0.number() + 1, block0.number(), 1000)

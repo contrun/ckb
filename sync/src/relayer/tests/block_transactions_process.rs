@@ -164,7 +164,7 @@ fn test_invalid_transaction_root() {
         .build();
 
     let prefilled = IndexTransaction::new_builder()
-        .index(0u32.pack())
+        .index(0u32)
         .transaction(tx1.data())
         .build();
 
@@ -252,10 +252,10 @@ fn test_collision_and_send_missing_indexes() {
     let fake_hash = tx3
         .hash()
         .as_builder()
-        .nth31(0u8.into())
-        .nth30(0u8.into())
-        .nth29(0u8.into())
-        .nth28(0u8.into())
+        .nth31(0u8)
+        .nth30(0u8)
+        .nth29(0u8)
+        .nth28(0u8)
         .build();
     // Fake tx with the same ProposalShortId but different hash with tx3
     let fake_tx = tx3.clone().fake_hash(fake_hash);

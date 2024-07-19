@@ -633,10 +633,10 @@ impl ChainSpec {
         );
 
         let block = BlockBuilder::default()
-            .version(self.genesis.version.pack())
+            .version(self.genesis.version)
             .parent_hash(self.genesis.parent_hash.pack())
-            .timestamp(self.genesis.timestamp.pack())
-            .compact_target(self.genesis.compact_target.pack())
+            .timestamp(self.genesis.timestamp)
+            .compact_target(self.genesis.compact_target)
             .extra_hash(self.genesis.uncles_hash.pack())
             .epoch(EpochNumberWithFraction::new_unchecked(0, 0, 0).pack())
             .dao(dao)
@@ -803,7 +803,7 @@ impl ChainSpec {
         let special_issued_lock = packed::Script::new_builder()
             .args(secp_lock_arg(&Privkey::from(SPECIAL_CELL_PRIVKEY.clone())).pack())
             .code_hash(CODE_HASH_SECP256K1_BLAKE160_SIGHASH_ALL.clone().pack())
-            .hash_type(ScriptHashType::Data.into())
+            .hash_type(ScriptHashType::Data)
             .build();
         let special_issued_cell = packed::CellOutput::new_builder()
             .capacity(special_cell_capacity.pack())
@@ -874,7 +874,7 @@ impl ChainSpec {
 
                 let data = out_points.pack().as_bytes();
                 let cell = packed::CellOutput::new_builder()
-                    .lock(self.genesis.system_cells_lock.clone().into())
+                    .lock(self.genesis.system_cells_lock.clone())
                     .build_exact_capacity(Capacity::bytes(data.len())?)?;
                 Ok((cell, data.pack()))
             })
@@ -934,7 +934,7 @@ impl GenesisCell {
     fn build_output(&self) -> Result<(packed::CellOutput, Bytes), Box<dyn Error>> {
         let data: Bytes = self.message.as_bytes().to_owned().into();
         let cell = packed::CellOutput::new_builder()
-            .lock(self.lock.clone().into())
+            .lock(self.lock.clone())
             .build_exact_capacity(Capacity::bytes(data.len())?)?;
         Ok((cell, data))
     }
@@ -943,7 +943,7 @@ impl GenesisCell {
 impl IssuedCell {
     fn build_output(&self) -> packed::CellOutput {
         packed::CellOutput::new_builder()
-            .lock(self.lock.clone().into())
+            .lock(self.lock.clone())
             .capacity(self.capacity.pack())
             .build()
     }
@@ -964,11 +964,11 @@ impl SystemCell {
         };
         let builder = packed::CellOutput::new_builder()
             .type_(type_script.pack())
-            .lock(lock.clone().into());
+            .lock(lock.clone());
 
         let data_len = Capacity::bytes(data.len())?;
         let cell = if let Some(capacity) = self.capacity {
-            let cell = builder.capacity(capacity.pack()).build();
+            let cell = builder.capacity(capacity).build();
             let occupied_capacity = cell.occupied_capacity(data_len)?.as_u64();
             if occupied_capacity > capacity {
                 return Err(format!(
@@ -1005,7 +1005,7 @@ pub(crate) fn build_type_id_script(input: &packed::CellInput, output_index: u64)
     let script_arg = Bytes::from(ret.to_vec());
     packed::Script::new_builder()
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .args(script_arg.pack())
         .build()
 }

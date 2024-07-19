@@ -53,7 +53,7 @@ fn test_halving_epoch_reward() {
 
     let header = |epoch: &EpochExt, number: u64| {
         HeaderBuilder::default()
-            .number(number.pack())
+            .number(number)
             .epoch(epoch.number_with_fraction(number).pack())
             .build()
     };

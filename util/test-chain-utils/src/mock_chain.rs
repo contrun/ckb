@@ -50,8 +50,8 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
-            .compact_target(epoch.compact_target().pack())
+            .number(parent.number() + 1)
+            .compact_target(epoch.compact_target())
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .dao(dao)
             .transaction(cellbase)
@@ -79,9 +79,9 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
+            .number(parent.number() + 1)
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
-            .compact_target(difficulty_to_compact(U256::from(difficulty)).pack())
+            .compact_target(difficulty_to_compact(U256::from(difficulty)))
             .dao(dao)
             .transaction(cellbase)
             .proposals(ids)
@@ -103,9 +103,9 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
+            .number(parent.number() + 1)
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
-            .compact_target(difficulty_to_compact(U256::from(difficulty)).pack())
+            .compact_target(difficulty_to_compact(U256::from(difficulty)))
             .dao(dao)
             .transaction(cellbase)
             .build();
@@ -127,8 +127,8 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
-            .compact_target(difficulty_to_compact(difficulty + U256::from(inc)).pack())
+            .number(parent.number() + 1)
+            .compact_target(difficulty_to_compact(difficulty + U256::from(inc)))
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .dao(dao)
             .transaction(cellbase)
@@ -150,8 +150,8 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
-            .compact_target(epoch.compact_target().pack())
+            .number(parent.number() + 1)
+            .compact_target(epoch.compact_target())
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .nonce(nonce.pack())
             .dao(dao)
@@ -174,8 +174,8 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
-            .compact_target(epoch.compact_target().pack())
+            .number(parent.number() + 1)
+            .compact_target(epoch.compact_target())
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .dao(dao)
             .transaction(cellbase)
@@ -210,8 +210,8 @@ impl<'a> MockChain<'a> {
 
         let new_block = BlockBuilder::default()
             .parent_hash(parent.hash())
-            .number((parent.number() + 1).pack())
-            .compact_target(epoch.compact_target().pack())
+            .number(parent.number() + 1)
+            .compact_target(epoch.compact_target())
             .epoch(epoch.number_with_fraction(parent.number() + 1).pack())
             .dao(dao)
             .transaction(cellbase)

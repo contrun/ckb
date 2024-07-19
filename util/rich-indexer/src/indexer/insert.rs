@@ -608,7 +608,7 @@ fn build_cell_output(row: Option<AnyRow>) -> Option<(i64, CellOutput, Bytes)> {
     let type_script = type_builder.build();
 
     let cell_output = CellOutput::new_builder()
-        .capacity((capacity as u64).pack())
+        .capacity(capacity as u64)
         .lock(lock_script)
         .type_(Some(type_script).pack())
         .build();

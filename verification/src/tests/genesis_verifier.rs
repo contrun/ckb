@@ -9,7 +9,7 @@ pub fn test_genesis_non_zero_number() {
     let genesis_block = Consensus::default().genesis_block().to_owned();
     let genesis_block = genesis_block
         .as_advanced_builder()
-        .number(42.pack())
+        .number(42)
         .epoch(EpochNumberWithFraction::from_full_value(0).pack())
         .build();
     let consensus = ConsensusBuilder::default()

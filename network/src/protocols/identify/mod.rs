@@ -589,7 +589,7 @@ impl Identify {
         Identify {
             encode_data: packed::Identify::new_builder()
                 .name(name.as_str().pack())
-                .flag(flags.bits().pack())
+                .flag(flags.bits())
                 .client_version(client_version.as_str().pack())
                 .build()
                 .as_bytes(),

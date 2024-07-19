@@ -37,7 +37,7 @@ fn check_vm_version() {
     let (vm_version_cell, vm_version_data_hash) = load_cell_from_path("testdata/vm_version_2");
 
     let vm_version_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(vm_version_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -69,7 +69,7 @@ fn check_get_memory_limit() {
         load_cell_from_path("testdata/get_memory_limit");
 
     let memory_limit_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(memory_limit_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -101,7 +101,7 @@ fn check_set_content() {
     let (set_content_cell, set_content_data_hash) = load_cell_from_path("testdata/set_content");
 
     let memory_limit_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(set_content_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -136,7 +136,7 @@ fn check_spawn_strcat() {
         load_cell_from_path("testdata/spawn_callee_strcat");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -169,7 +169,7 @@ fn check_spawn_strcat_data_hash() {
         load_cell_from_path("testdata/spawn_callee_strcat");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -202,7 +202,7 @@ fn check_spawn_get_memory_limit() {
         load_cell_from_path("testdata/spawn_callee_get_memory_limit");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -235,7 +235,7 @@ fn check_spawn_set_content() {
         load_cell_from_path("testdata/spawn_callee_set_content");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -268,7 +268,7 @@ fn check_spawn_out_of_cycles() {
         load_cell_from_path("testdata/spawn_callee_out_of_cycles");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -308,7 +308,7 @@ fn check_spawn_exec() {
     let (spawn_callee_callee_cell, _) = load_cell_from_path("testdata/spawn_callee_exec_callee");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -345,7 +345,7 @@ fn check_spawn_strcat_wrap() {
     let (spawn_callee_callee_cell, _) = load_cell_from_path("testdata/spawn_callee_strcat");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -382,7 +382,7 @@ fn check_spawn_out_of_cycles_wrap() {
     let (spawn_callee_callee_cell, _) = load_cell_from_path("testdata/spawn_callee_out_of_cycles");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -424,7 +424,7 @@ fn check_spawn_recursive() {
         load_cell_from_path("testdata/spawn_recursive");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -459,7 +459,7 @@ fn check_spawn_big_memory_size() {
         load_cell_from_path("testdata/spawn_big_memory_size");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -490,7 +490,7 @@ fn check_spawn_big_content_length() {
         load_cell_from_path("testdata/spawn_big_content_length");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -521,7 +521,7 @@ fn check_peak_memory_4m_to_32m() {
         load_cell_from_path("testdata/spawn_peak_memory_4m_to_32m");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -552,7 +552,7 @@ fn check_peak_memory_2m_to_32m() {
         load_cell_from_path("testdata/spawn_peak_memory_2m_to_32m");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -583,7 +583,7 @@ fn check_peak_memory_512k_to_32m() {
         load_cell_from_path("testdata/spawn_peak_memory_512k_to_32m");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -618,7 +618,7 @@ fn check_spawn_snapshot() {
     let (snapshot_cell, _) = load_cell_from_path("testdata/current_cycles_with_snapshot");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -659,7 +659,7 @@ fn check_spawn_state() {
     let (snapshot_cell, _) = load_cell_from_path("testdata/current_cycles_with_snapshot");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -724,7 +724,7 @@ fn check_spawn_current_memory() {
         load_cell_from_path("testdata/spawn_current_memory");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -757,7 +757,7 @@ fn check_spawn_current_cycles() {
         load_cell_from_path("testdata/spawn_callee_current_cycles");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -787,7 +787,7 @@ fn check_spawn_times_bug_1() {
     let (spawn_caller_cell, spawn_caller_data_hash) = load_cell_from_path("testdata/spawn_times");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()
@@ -819,7 +819,7 @@ fn check_spawn_times_bug_2() {
     let (spawn_caller_cell, spawn_caller_data_hash) = load_cell_from_path("testdata/spawn_times");
 
     let spawn_caller_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(spawn_caller_data_hash)
         .build();
     let output = CellOutputBuilder::default()

@@ -84,7 +84,7 @@ fn check_signature() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let input = CellInput::new(OutPoint::null(), 0);
 
@@ -148,7 +148,7 @@ fn check_signature_referenced_via_type_hash() {
             Some(
                 Script::new_builder()
                     .code_hash(h256!("0x123456abcd90").pack())
-                    .hash_type(ScriptHashType::Data.into())
+                    .hash_type(ScriptHashType::Data)
                     .build(),
             )
             .pack(),
@@ -163,7 +163,7 @@ fn check_signature_referenced_via_type_hash() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(type_hash)
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
     let input = CellInput::new(OutPoint::null(), 0);
 
@@ -222,7 +222,7 @@ fn check_invalid_signature() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(code_hash.pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let input = CellInput::new(OutPoint::null(), 0);
 
@@ -273,7 +273,7 @@ fn check_invalid_dep_reference() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(script_code_hash.clone())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let input = CellInput::new(OutPoint::null(), 0);
 
@@ -335,13 +335,13 @@ fn check_output_contract() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(blake2b_256(&buffer).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let output_data = Bytes::default();
     let output = CellOutputBuilder::default()
         .lock(
             Script::new_builder()
-                .hash_type(ScriptHashType::Data.into())
+                .hash_type(ScriptHashType::Data)
                 .build(),
         )
         .type_(Some(script).pack())
@@ -416,7 +416,7 @@ fn check_invalid_output_contract() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(blake2b_256(&buffer).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let output = CellOutputBuilder::default()
         .type_(Some(script.clone()).pack())
@@ -475,7 +475,7 @@ fn check_same_lock_and_type_script_are_executed_twice() {
     let script = Script::new_builder()
         .args(Bytes::from(args).pack())
         .code_hash(blake2b_256(&buffer).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
 
     let dep_out_point = OutPoint::new(h256!("0x123").pack(), 8);
@@ -528,7 +528,7 @@ fn check_type_id_one_in_one_out() {
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -592,7 +592,7 @@ fn check_type_id_one_in_one_out_not_enough_cycles() {
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -672,7 +672,7 @@ fn check_type_id_creation() {
     let type_id_script = Script::new_builder()
         .args(input_hash.pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let output_cell = CellOutputBuilder::default()
@@ -724,7 +724,7 @@ fn check_type_id_termination() {
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -803,7 +803,7 @@ fn check_type_id_invalid_creation() {
     let type_id_script = Script::new_builder()
         .args(input_hash.pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let output_cell = CellOutputBuilder::default()
@@ -882,7 +882,7 @@ fn check_type_id_invalid_creation_length() {
     let type_id_script = Script::new_builder()
         .args(input_hash.pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let output_cell = CellOutputBuilder::default()
@@ -937,7 +937,7 @@ fn check_type_id_one_in_two_out() {
     let type_id_script = Script::new_builder()
         .args(Bytes::from(h256!("0x1111").as_ref()).pack())
         .code_hash(TYPE_ID_CODE_HASH.pack())
-        .hash_type(ScriptHashType::Type.into())
+        .hash_type(ScriptHashType::Type)
         .build();
 
     let input = CellInput::new(OutPoint::new(h256!("0x1234").pack(), 8), 0);
@@ -1034,7 +1034,7 @@ fn create_rtx_to_load_code_to_stack_then_reuse(
         load_cell_from_path("testdata/load_code_to_stack_then_reuse");
 
     let dyn_lock_script = Script::new_builder()
-        .hash_type(script_version.data_hash_type().into())
+        .hash_type(script_version.data_hash_type())
         .code_hash(dyn_lock_data_hash)
         .args(args)
         .build();
@@ -1119,13 +1119,13 @@ fn check_debugger() {
 
     let script = Script::new_builder()
         .code_hash(blake2b_256(&buffer).pack())
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .build();
     let output_data = Bytes::default();
     let output = CellOutputBuilder::default()
         .lock(
             Script::new_builder()
-                .hash_type(ScriptHashType::Data.into())
+                .hash_type(ScriptHashType::Data)
                 .build(),
         )
         .type_(Some(script).pack())

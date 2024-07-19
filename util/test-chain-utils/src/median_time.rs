@@ -49,8 +49,8 @@ impl MockMedianTime {
                     .map(|(idx, timestamp)| {
                         let number = idx as BlockNumber;
                         let header = HeaderBuilder::default()
-                            .timestamp(timestamp.pack())
-                            .number(number.pack())
+                            .timestamp(timestamp)
+                            .number(number)
                             .epoch(
                                 EpochNumberWithFraction::new(
                                     number % MOCK_EPOCH_LENGTH,
